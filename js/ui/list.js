@@ -238,7 +238,7 @@ export function initList() {
     const c = e.target.closest('.card');
     if (!c) return;
     if (pressed) { pressed = false; return; } // 長押しの直後のタップは無視
-    openDetail(filtered[+c.dataset.i]);
+    openDetail(filtered[+c.dataset.i], { list: filtered, index: +c.dataset.i });
   };
 
   // 一番上で下に引っ張ると新着を取りに行く（ホーム画面アプリには標準の引っ張って更新がないため）

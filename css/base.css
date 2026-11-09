@@ -253,3 +253,8 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 .dock .suggest { top: auto; bottom: 46px; }
 /* トーストはドックの上に出す */
 #toast { bottom: calc(var(--dock-h) + var(--safe-bottom) + 12px); }
+
+/* 詳細シートの前後移動 */
+.detail-nav { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
+.detail-nav .link { font-size: 13px; padding: 4px 0; }
+.detail-nav .link:disabled { color: var(--border); }

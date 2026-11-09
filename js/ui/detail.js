@@ -17,6 +17,13 @@ import { setQuery, setStudio } from './list.js';
 
 const RELATED = 12;
 
+function go(step) {
+  if (!nav) return;
+  const i = nav.index + step;
+  if (i < 0 || i >= nav.list.length) return;
+  openDetail(nav.list[i], { list: nav.list, index: i });
+}
+
 // 同じスタジオの動画（新しい順。自分自身は除く）
 function relatedHTML(video) {
   if (!video.studioKey) return '';
@@ -38,7 +45,13 @@ function relatedHTML(video) {
     </div>`;
 }
 
-export function openDetail(video) {
+// 左右スワイプで前後の動画へ移るための並び（一覧から開いたときだけ）
+let nav = null; // { list, index }
+
+// opts.list / opts.index を渡すと、その並びで前後の動画へスワイプで移れる
+export function openDetail(video, opts = {}) {
+  if (!video) return;
+  nav = opts.list ? { list: opts.list, index: opts.index } : null;
   const el = document.createElement('div');
   el.className = 'detail';
   el.innerHTML = `
@@ -89,6 +102,30 @@ export function openDetail(video) {
     if (em) return play(em.dataset.embed);
     const rel = e.target.closest('[data-related]');
     if (rel) openDetail(state.byKey.get(rel.dataset.related));
+    const step = e.target.closest('[data-step]');
+    if (step) go(+step.dataset.step);
+  });
+
+  // 前後の動画への移動（スワイプか、見出し横の ‹ › ボタン）
+  if (nav) {
+    const pos = document.createElement('div');
+    pos.className = 'detail-nav';
+    pos.innerHTML = `<button class="link" data-step="-1" ${nav.index > 0 ? '' : 'disabled'} aria-label="前の動画">‹ 前へ</button>
+      <span>${(nav.index + 1).toLocaleString()} / ${nav.list.length.toLocaleString()}</span>
+      <button class="link" data-step="1" ${nav.index < nav.list.length - 1 ? '' : 'disabled'} aria-label="次の動画">次へ ›</button>`;
+    el.prepend(pos);
+  }
+  let sx = null, sy = 0;
+  el.addEventListener('touchstart', (e) => {
+    // 横スクロールする部品（カルーセル・関連動画・タグ・プレイヤー）の上では使わない
+    sx = e.target.closest('.dt-carousel, .related, .tags, .hero iframe, .dt-root [class*="gallery"]') ? null : e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+  }, { passive: true });
+  el.addEventListener('touchend', (e) => {
+    if (sx == null || !nav) return;
+    const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dx) > 70 && Math.abs(dy) < 50) go(dx < 0 ? 1 : -1);
+    sx = null;
   });
 
   openSheet(el);

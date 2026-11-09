@@ -52,6 +52,14 @@ test('Service Worker の SHELL にアプリのファイルがすべて入って�
 
 test('index.html が参照する CSS・JS が存在する', () => {
   const html = readFileSync(join(root, 'index.html'), 'utf8');
-  for (const [, p] of html.matchAll(/(?:href|src)="((?:css|js|icons)\/[^"]+)"/g)) assert.ok(existsSync(join(root, p)), `${p} が存在しません`);
-  for (const f of walk('css')) assert.ok(html.includes(`href="${f}"`), `index.html が ${f} を読み込んでいません`);
+  for (const [, p] of html.matchAll(/(?:href|src)="((?:css|js|icons)\/[^"?]+)/g)) assert.ok(existsSync(join(root, p)), `${p} が存在しません`);
+  for (const f of walk('css')) assert.ok(html.includes(`href="${f}?v=`) || html.includes(`href="${f}"`), `index.html が ${f} を読み込んでいません`);
+});
+
+import { expectedIndex } from '../tools/stamp.js';
+
+test('index.html の版番号（import map・CSS・main.js）が最新の中身と合っている（ずれていたら npm run stamp）', () => {
+  const html = readFileSync(join(root, 'index.html'), 'utf8');
+  assert.ok(html.includes('<script type="importmap">'), 'import map がありません。npm run stamp を実行してください');
+  assert.equal(html, expectedIndex(html), '版番号が古いままです。npm run stamp を実行してください');
 });

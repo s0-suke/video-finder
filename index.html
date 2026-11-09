@@ -13,10 +13,37 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="referrer" content="no-referrer">
 <title>Video Finder</title>
-<link rel="stylesheet" href="css/base.css">
-<link rel="stylesheet" href="css/player.css">
-<link rel="stylesheet" href="css/favorites.css">
-<link rel="stylesheet" href="css/details.css">
+<!-- stamp:importmap -->
+<script type="importmap">
+{
+  "imports": {
+    "./js/crawler.js": "./js/crawler.js?v=baa1493b",
+    "./js/data.js": "./js/data.js?v=4557d67b",
+    "./js/db.js": "./js/db.js?v=b76d3ed9",
+    "./js/details.js": "./js/details.js?v=1d6be96d",
+    "./js/favorites.js": "./js/favorites.js?v=e7cba4fb",
+    "./js/history.js": "./js/history.js?v=c9e90455",
+    "./js/main.js": "./js/main.js?v=8c9d44d2",
+    "./js/matching.js": "./js/matching.js?v=a4beaba5",
+    "./js/player.js": "./js/player.js?v=6099de53",
+    "./js/release.js": "./js/release.js?v=c3198ec8",
+    "./js/source.js": "./js/source.js?v=f377aeb0",
+    "./js/ui/detail.js": "./js/ui/detail.js?v=f4b95cc2",
+    "./js/ui/filters.js": "./js/ui/filters.js?v=59b7bcb1",
+    "./js/ui/list.js": "./js/ui/list.js?v=6bae6b22",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=60b75cbb",
+    "./js/ui/sheet.js": "./js/ui/sheet.js?v=11395509",
+    "./js/ui/tabbar.js": "./js/ui/tabbar.js?v=f97c04e4",
+    "./js/util.js": "./js/util.js?v=9b0603bd",
+    "./js/wp.js": "./js/wp.js?v=3228695d"
+  }
+}
+</script>
+<!-- /stamp:importmap -->
+<link rel="stylesheet" href="css/base.css?v=65c290ab">
+<link rel="stylesheet" href="css/player.css?v=286fe765">
+<link rel="stylesheet" href="css/favorites.css?v=ac18fb05">
+<link rel="stylesheet" href="css/details.css?v=6b1698ca">
 </head>
 <body>
 
@@ -104,6 +131,6 @@
 <div class="backdrop" id="backdrop"></div>
 <div class="sheet" id="sheet"></div>
 
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/main.js?v=8c9d44d2"></script>
 </body>
 </html>
