@@ -1,0 +1,48 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { extractCode, stripCode, groupKey, normalizeCode, pickStudio, studioKey } from '../js/matching.js';
+
+test('タイトル先頭の品番を取り出す', () => {
+  assert.equal(extractCode('GT-2714 – 顔射に中出し♂'), 'GT-2714');
+  assert.equal(extractCode('MR-KR309 – ビジュアル系男子'), 'MR-KR309');
+  assert.equal(extractCode('cr-0529 ソクハメ'), 'CR-0529');
+});
+
+test('英字-英字+数字の品番（MR-KR2387）も取り出す', () => {
+  assert.equal(extractCode('タイトルのみ', ["Men's Rush.TV", 'MR-KR2387']), 'MR-KR2387');
+});
+
+test('タグは品番だけのものに限る（文中の数字列を誤検出しない）', () => {
+  assert.equal(extractCode('タイトル', ['Secret Room vol.8', '18歳']), null);
+  assert.equal(extractCode('タイトル', ['これは AB-123 を含む長いタグ']), null);
+});
+
+test('品番がなければ null', () => {
+  assert.equal(extractCode('ノンケの密室ハメ撮りを覗き見!!'), null);
+});
+
+test('タイトル先頭の品番と区切り記号を取り除く', () => {
+  assert.equal(stripCode('GT-2714 – 顔射に中出し', 'GT-2714'), '顔射に中出し');
+  assert.equal(stripCode('MRKR309: 本文', 'MR-KR309'), '本文');
+  assert.equal(stripCode('本文だけ', null), '本文だけ');
+});
+
+test('ハイフンの有無が違っても同じ統合キーになる', () => {
+  assert.equal(normalizeCode('MR-KR2387'), normalizeCode('MRKR2387'));
+  assert.equal(groupKey('MR-KR2387', 'a', '1:1'), groupKey('MRKR-2387', 'b', '2:2'));
+});
+
+test('品番がなければ正規化したタイトルで統合し、短いタイトルは統合しない', () => {
+  assert.equal(groupKey(null, 'ノンケ激盗撮〜Secret Room〜vol.8', '1:1'), groupKey(null, 'ノンケ激盗撮 Secret Room vol.8', '2:9'));
+  assert.equal(groupKey(null, 'RUITO×SYO', '1:5'), 'post:1:5');
+});
+
+test('スタジオはタグ（品番以外）を優先し、なければカテゴリ', () => {
+  assert.equal(pickStudio(["Men's Rush.TV", 'GT-2720'], ["MEN'S RUSH.TV"]), "Men's Rush.TV");
+  assert.equal(pickStudio(['GT-2720'], ['AAA', 'Japan Gay Scenes']), 'Japan Gay Scenes');
+  assert.equal(pickStudio([], ['AAA']), null);
+});
+
+test('スタジオ名の表記ゆれを同じキーにまとめる', () => {
+  assert.equal(studioKey("MEN'S RUSH.TV"), studioKey('Men’s Rush.TV'));
+});
