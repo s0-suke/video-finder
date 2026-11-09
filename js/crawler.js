@@ -15,6 +15,9 @@ const PAGE_DELAY_MS = 300;
 
 export const crawl = { running: false, added: 0 };
 
+// 開発用: URL に ?dev を付けると、各サイト 1 ページ目だけ取って全件取得はしない
+const DEV = new URLSearchParams(location.search).has('dev');
+
 const termCache = new Map(); // `${siteId}:${termId}` -> name
 
 export async function initCrawler() {
@@ -78,9 +81,9 @@ function scheduleRebuild() {
   rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuild(); emit('data'); }, 3000);
 }
 
-async function crawlPages(site, start, { stopWhenKnown, track }) {
+async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinity }) {
   let page = start, total = start;
-  while (page <= total) {
+  while (page <= Math.min(total, maxPage)) {
     site.status = `収集中 ${page}/${total} ページ`;
     emit('progress');
     const { data, totalPages } = await wpGet(site.url, 'posts', {
@@ -108,6 +111,14 @@ async function crawlPages(site, start, { stopWhenKnown, track }) {
 async function crawlSite(site, { full = false } = {}) {
   try {
     const track = !site.backfillDone;
+    if (DEV) {
+      await crawlPages(site, 1, { stopWhenKnown: true, track: false, maxPage: 1 });
+      site.status = 'OK（開発モード: 1 ページ目のみ）';
+      site.error = false;
+      site.lastRun = new Date().toISOString();
+      await saveSite(site);
+      return emit('progress');
+    }
     await crawlPages(site, 1, { stopWhenKnown: !full, track });
     if (!full && !site.backfillDone) {
       await crawlPages(site, site.backfillPage || 1, { stopWhenKnown: false, track });
@@ -147,7 +158,7 @@ export async function maybeAutoCollect() {
   const min = await db.kvGet('intervalMin', 30);
   if (!min || crawl.running || !navigator.onLine) return;
   const last = await db.kvGet('lastCollect', 0);
-  const unfinished = state.sites.some((s) => s.enabled && !s.backfillDone && !s.error);
+  const unfinished = !DEV && state.sites.some((s) => s.enabled && !s.backfillDone && !s.error);
   if (unfinished || Date.now() - last >= min * 60 * 1000) collect();
 }
 

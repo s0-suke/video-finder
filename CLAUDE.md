@@ -7,3 +7,13 @@
 - 動作確認は `.claude/launch.json` の `pwa`（`python3 -m http.server 8790`）を起動し、スマホ幅で行う。
 - 実際の収集が走るので、確認が終わったらタブを閉じる。
 - `server/` は旧版（Node のサーバー版）。現在は使っていない。
+
+## 開発の進め方
+
+- 構成: `js/main.js`（起動）→ `data.js`（メモリ上の状態とイベント）/ `crawler.js`（収集）/ `source.js`（本文の取得）/ `matching.js`（品番・統合キー。純粋関数）/ `db.js`（IndexedDB）/ `wp.js`（WordPress API）/ `ui/`（画面）。
+  拡張用モジュールは `player.js`（再生）/ `favorites.js`（お気に入り）/ `details.js`（外部サイトの詳細情報）/ `history.js`（視聴履歴）。
+- モジュール間は `data.js` の `emit` / `on` のイベント（'data' / 'progress' / 'favs' / 'history'）でつなぐ。設定画面への項目追加は `ui/settings.js` の `registerSettingsSection`。
+- スタイルは `css/base.css` と、拡張モジュールごとの `css/<module>.css`。
+- ファイルを増やしたら `sw.js` の `SHELL` に足す。`npm test`（`node --test`）が import 先・SHELL・index.html の参照漏れを検出する。
+- ブラウザ確認は URL に `?dev` を付ける（各サイト 1 ページ目だけ取得し、全件取得をしない）。
+- 文言・コメントは日本語。
