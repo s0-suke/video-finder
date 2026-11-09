@@ -266,3 +266,9 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 .feature-row .note { display: block; font-size: 11px; margin-top: 1px; }
 .feature-row + .feature-row { border-top: 1px solid var(--border); }
 .tabbar button[hidden] { display: none; }
+
+/* スタジオ一覧 */
+.picker-q { width: 100%; height: 40px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface-2); padding: 0 14px; font-size: 16px; margin: 4px 0 8px; outline: none; }
+.picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 12px 4px; text-align: left; font-size: 15px; }
+.picker-row.on { color: var(--accent); font-weight: 600; }
+.picker-n { color: var(--muted); font-size: 12px; }

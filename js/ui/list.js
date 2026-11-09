@@ -12,7 +12,7 @@ import { normalizeCode } from '../matching.js';
 import { feature } from '../features.js';
 import { isSheetOpen } from './sheet.js';
 import { openDetail } from './detail.js';
-import { openFilters } from './filters.js';
+import { openStudioPicker } from './filters.js';
 
 const PAGE = 40;
 const CHIP_STUDIOS = 15;
@@ -126,6 +126,9 @@ export function renderChips() {
     chip(!filters.studio, 'data-chip="all"', 'すべて') +
     top.map((s) => chip(filters.studio === s.key, `data-chip="studio" data-key="${esc(s.key)}"`, esc(s.name))).join('') +
     (state.studios.length > CHIP_STUDIOS ? '<button class="chip more" data-chip="more">スタジオ一覧…</button>' : '');
+  // 選んでいるチップが横スクロールの外にあれば見える位置まで送る
+  const on = $('#chips .chip.on');
+  if (on && filters.studio) on.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
 
 // 保存してある絞り込みの対象（スタジオ・サイト）がなくなっていたら外す。外したら true
@@ -214,7 +217,7 @@ export function initList() {
     const b = e.target.closest('.chip');
     if (!b) return;
     const kind = b.dataset.chip;
-    if (kind === 'more') return openFilters();
+    if (kind === 'more') return openStudioPicker();
     if (kind === 'all') filters.studio = '';
     if (kind === 'studio') filters.studio = filters.studio === b.dataset.key ? '' : b.dataset.key;
     saveFilters();
@@ -241,6 +244,17 @@ export function initList() {
   $('#grid').addEventListener('touchmove', cancel, { passive: true });
   $('#grid').addEventListener('touchend', cancel);
   $('#grid').addEventListener('contextmenu', (e) => { if (e.target.closest('.card')) e.preventDefault(); });
+  // サムネイルの読み込みに失敗したら、代わりの表示（スタジオ名）に切り替える
+  $('#grid').addEventListener('error', (e) => {
+    const img = e.target;
+    if (img.tagName !== 'IMG' || !img.closest('.thumb')) return;
+    const v = filtered[+img.closest('.card').dataset.i];
+    const ph = document.createElement('div');
+    ph.className = 'ph';
+    ph.textContent = (v && (v.studio || v.title.slice(0, 12))) || '';
+    img.replaceWith(ph);
+  }, true);
+
   $('#grid').onclick = (e) => {
     const c = e.target.closest('.card');
     if (!c) return;

@@ -65,3 +65,29 @@ export function openFilters() {
     done();
   };
 }
+
+// スタジオ一覧（名前で絞り込み、本数の多い順。タップでそのスタジオに絞る）
+export function openStudioPicker() {
+  const el = openSheet(`
+    <h2 style="margin-top:0">スタジオ</h2>
+    <input class="picker-q" type="search" placeholder="スタジオ名で探す" autocomplete="off">
+    <div class="picker-list"></div>
+  `);
+  const q = el.querySelector('.picker-q');
+  const list = el.querySelector('.picker-list');
+  const paint = () => {
+    const w = q.value.trim().normalize('NFKC').toLowerCase();
+    const rows = state.studios.filter((s) => !w || s.name.normalize('NFKC').toLowerCase().includes(w)).slice(0, 300);
+    list.innerHTML = (filters.studio ? '<button class="picker-row" data-key="">すべてのスタジオ</button>' : '') +
+      rows.map((s) => `<button class="picker-row ${filters.studio === s.key ? 'on' : ''}" data-key="${esc(s.key)}"><span>${esc(s.name)}</span><span class="picker-n">${s.count.toLocaleString()}</span></button>`).join('') +
+      (rows.length ? '' : '<p class="note">見つかりません</p>');
+  };
+  paint();
+  q.addEventListener('input', paint);
+  list.onclick = (e) => {
+    const b = e.target.closest('[data-key]');
+    if (!b) return;
+    filters.studio = b.dataset.key;
+    saveFilters(); renderChips(); closeSheet(); render();
+  };
+}
