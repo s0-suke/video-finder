@@ -104,10 +104,6 @@ header {
 }
 @media (min-width: 720px) { .sheet { left: 50%; right: auto; width: 680px; margin-left: -340px; } }
 .sheet.open { transform: translateY(0); }
-.sheet-close {
-  position: sticky; top: 0; float: right; z-index: 2; margin: -4px -6px 0 0;
-  width: 32px; height: 32px; border-radius: 16px; border: 0; background: rgba(60,60,68,.85); color: var(--text); font-size: 18px; line-height: 1;
-}
 .grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--border); margin: 0 auto 12px; }
 .sheet h2 { font-size: 17px; margin: 10px 0 4px; line-height: 1.4; }
 .sheet .hero { aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: #000; }

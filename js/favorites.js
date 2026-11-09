@@ -14,7 +14,7 @@
 //   { app: 'video-finder', type: 'favorites', version: 1, exportedAt, items: [行, …] }
 
 import * as db from './db.js';
-import { state, on, emit } from './data.js';
+import { state, on, emit, findMoved } from './data.js';
 import { toast, esc } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
@@ -103,8 +103,19 @@ export function favButton(video) {
 
 function fillMissing() {
   const changed = [];
-  for (const r of rows.values()) {
-    const v = state.byKey.get(r.key);
+  let moved = false;
+  for (const r of [...rows.values()]) {
+    let v = state.byKey.get(r.key);
+    // 統合キーが変わった動画は、品番・タイトルで探し直して付け替える
+    if (!v && state.videos.length && (v = findMoved(r)) && !rows.has(v.key)) {
+      rows.delete(r.key);
+      db.del(STORE, r.key).catch(() => {});
+      r.key = v.key;
+      rows.set(r.key, r);
+      changed.push(r);
+      moved = true;
+      continue;
+    }
     if (!v) continue;
     let dirty = false;
     for (const f of ['title', 'thumb', 'code', 'studio']) {
@@ -113,6 +124,7 @@ function fillMissing() {
     if (dirty) changed.push(r);
   }
   if (changed.length) db.putAll(STORE, changed).catch(() => {});
+  if (moved) emit('favs');
 }
 
 // ---- 設定画面のセクション ----

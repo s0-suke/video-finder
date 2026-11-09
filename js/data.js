@@ -6,7 +6,7 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag } from './matching.js';
+import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode } from './matching.js';
 
 // 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
 const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
@@ -111,7 +111,22 @@ export function rebuild() {
 
   state.videos = videos;
   state.byKey = new Map(videos.map((v) => [v.key, v]));
+  movedIndex = null;
   state.studios = studios;
+}
+
+// 統合キーが変わった動画（品番の判定を改良したときなど）を、保存しておいた品番・タイトルから探し直す。
+// お気に入り・履歴の付け替えに使う
+let movedIndex = null;
+export function findMoved({ code, title }) {
+  if (!movedIndex) {
+    movedIndex = { code: new Map(), title: new Map() };
+    for (const v of state.videos) {
+      if (v.code && !movedIndex.code.has(normalizeCode(v.code))) movedIndex.code.set(normalizeCode(v.code), v);
+      if (v.title && !movedIndex.title.has(v.title)) movedIndex.title.set(v.title, v);
+    }
+  }
+  return (code && movedIndex.code.get(normalizeCode(code))) || (title && movedIndex.title.get(title)) || null;
 }
 
 export async function saveSite(site) {

@@ -12,8 +12,7 @@ export function openSheet(content, { onClose: cb } = {}) {
   const el = sheet();
   if (onClose) onClose();
   onClose = cb || null;
-  el.innerHTML = '<div class="grabber"></div><button class="sheet-close" aria-label="閉じる">×</button>';
-  el.querySelector('.sheet-close').onclick = closeSheet;
+  el.innerHTML = '<div class="grabber"></div>';
   if (typeof content === 'string') el.insertAdjacentHTML('beforeend', content);
   else el.appendChild(content);
   el.scrollTop = 0;
