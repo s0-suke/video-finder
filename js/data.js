@@ -121,7 +121,7 @@ export function rebuild() {
     videos.push({
       key,
       code: main.code,
-      title: main.title,
+      title: stripCode(main.title, main.code), // 保存済みのタイトルに品番が残っていても表示では外す
       thumb: main.thumb,
       date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
       // 発売日の目安。otokoki になければ、いちばん早い掲載日で代用する（releaseKnown = false）

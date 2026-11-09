@@ -22,7 +22,7 @@ import * as db from './db.js';
 import { wpGet } from './wp.js';
 import { loadContent } from './source.js';
 import { state } from './data.js';
-import { normalizeCode, normalizeTitle, stripCode, studioKey } from './matching.js';
+import { normalizeCode, normalizeTitle, stripCode, studioKey, safeUrl } from './matching.js';
 import { esc, decodeEntities } from './util.js';
 
 const OTOKOKI = 'https://otokoki.net/';
@@ -183,10 +183,10 @@ async function buildOtokoki(post) {
   ]);
   return {
     id: post.id,
-    link: post.link,
+    link: safeUrl(post.link, OTOKOKI),
     title: decodeEntities(post.title.rendered),
     description: otokokiDescription(post.content.rendered),
-    image: image || null,
+    image: safeUrl(image, OTOKOKI),
     groups,
   };
 }
@@ -395,7 +395,8 @@ function merge(video, otokoki, sources, previews = []) {
     .map((g) => ({ label: g.label, items: g.items.filter((n) => !tagSet.has(normalizeTitle(n))) }))
     .filter((g) => g.items.length) : [];
 
-  return { description: paras.join('\n\n'), images, groups, link: otokoki && otokoki.link };
+  // キャッシュ済みの古い結果にも効くよう、表示の直前でも http(s) 以外の URL を捨てる
+  return { description: paras.join('\n\n'), images: images.map((u) => safeUrl(u)).filter(Boolean), groups, link: otokoki && safeUrl(otokoki.link) };
 }
 
 // ───────────── 描画 ─────────────

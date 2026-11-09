@@ -140,6 +140,26 @@ export function setView(view) {
   render();
 }
 
+// ---- 最近の検索 ----
+
+const RECENT_MAX = 12;
+const loadRecent = () => { try { return JSON.parse(localStorage.getItem('recentQueries') || '[]'); } catch { return []; } };
+function saveRecent(list) { try { localStorage.setItem('recentQueries', JSON.stringify(list.slice(0, RECENT_MAX))); } catch {} }
+function rememberQuery(q) {
+  q = q.trim();
+  if (q.length < 2) return;
+  saveRecent([q, ...loadRecent().filter((x) => x !== q)]);
+}
+
+function renderSuggest() {
+  const box = $('#suggest');
+  const recent = loadRecent();
+  if ($('#q').value || !recent.length) return box.classList.add('hidden');
+  box.innerHTML = `<div class="suggest-head">最近の検索</div>` +
+    recent.map((q) => `<div class="suggest-row"><button class="suggest-q" data-q="${esc(q)}">${esc(q)}</button><button class="suggest-del" data-del="${esc(q)}" aria-label="削除">×</button></div>`).join('');
+  box.classList.remove('hidden');
+}
+
 export function setQuery(q) {
   $('#q').value = q;
   filters.q = q;

@@ -98,3 +98,7 @@ test('年に見える番号のハイフン付き品番（GT-1925 / GT-2024）は
   assert.equal(extractCode('GT-1925 – 色白小柄な大学生'), 'GT-1925');
   assert.equal(extractCode('x', ['GT-2024']), 'GT-2024');
 });
+
+test('ハイフンなしで書かれたタイトル先頭の品番（OAV584 – ）も外す', () => {
+  assert.equal(stripCode('OAV584 – 隣の大学生', 'OAV-584'), '隣の大学生');
+});
