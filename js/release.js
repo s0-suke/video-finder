@@ -34,10 +34,11 @@ function renderSection(el) {
     if (!el.isConnected) return;
     const enabled = await db.kvGet('releaseEnabled', true);
     el.innerHTML = `
-      <div class="switch"><span>otokoki の掲載日を発売日の目安に使う</span><button class="toggle ${enabled ? 'on' : ''}" data-act="toggle" aria-label="切り替え"></button></div>
-      <div class="status">${release.running ? release.status : release.status || (state.release.byTitle.size ? `${state.release.byCode.size.toLocaleString()} 品番 / ${state.release.byTitle.size.toLocaleString()} タイトル` : 'まだ取得していません')}</div>
+      <div class="switch"><span>発売日の目安を取得する</span><button class="toggle ${enabled ? 'on' : ''}" data-act="toggle" aria-label="切り替え"></button></div>
+      <div class="status">${release.running ? release.status : release.status || (state.release.byTitle.size ? `${state.release.byTitle.size.toLocaleString()} 件の対応表` : 'まだ取得していません')}</div>
       <div class="btn-row"><button class="btn" data-act="refetch" ${release.running ? 'disabled' : ''}>取り直す</button></div>
-      <p class="note" style="margin-bottom:0">絞り込みの「日付の基準」で「発売日」を選ぶと、この日付で並びます。otokoki は新作の配信に合わせて記事を出すため、その掲載日を発売日の目安にしています。照合できない動画は「発売日不明」となり、発売日順では後ろに並びます。動画の詳細を開いたときに otokoki の記事が見つかれば、その日付も記録します。初回は記事のタイトルと日付だけを全件（数 MB）取得します。</p>`;
+      <p class="note" style="margin-bottom:0">絞り込みの「日付の基準」で「発売日」を選ぶと、この日付で並びます。</p>
+      <details class="more"><summary>詳しく</summary><p class="note">otokoki（ゲイ動画の紹介サイト）は新作の配信に合わせて記事を出すため、その掲載日を発売日の目安にしています。照合できない動画は「発売日不明」となり、発売日順では後ろに並びます。動画の詳細を開いたときに otokoki の記事が見つかれば、その日付も記録します。初回は記事のタイトルと日付だけを全件（数 MB）取得します。</p></details>`;
     el.querySelector('[data-act="toggle"]').onclick = async () => {
       await db.kvSet('releaseEnabled', !enabled);
       if (!enabled) collectRelease({ force: true });
@@ -105,7 +106,7 @@ export async function collectRelease({ force = false } = {}) {
         await db.kvSet('releaseBackfillDone', true);
       }
     }
-    release.status = `OK（${state.release.byCode.size.toLocaleString()} 品番 / ${state.release.byTitle.size.toLocaleString()} タイトル）`;
+    release.status = `OK（${state.release.byTitle.size.toLocaleString()} 件の対応表）`;
     await db.kvSet('releaseLastRun', Date.now());
   } catch (e) {
     release.status = 'エラー: ' + e.message;

@@ -1,6 +1,6 @@
 // 起動処理とルーティング（#settings で設定画面、それ以外は一覧）
 
-import { $ } from './util.js';
+import { $, toast } from './util.js';
 import { openDB } from './db.js';
 import { loadAll, on } from './data.js';
 import { crawl, initCrawler, maybeAutoCollect, backfillProgress, repairCodes } from './crawler.js';
@@ -76,6 +76,13 @@ async function boot() {
   saveFilters();
   renderChips();
   route();
+  // 隠れた操作（長押しでお気に入り）を一度だけ知らせる
+  try {
+    if (feature('longPressFav') && !localStorage.getItem('hintLongPress') && document.querySelector('.card:not(.skel)')) {
+      setTimeout(() => toast('ヒント: カードを長押しするとお気に入りに追加できます'), 1500);
+      localStorage.setItem('hintLongPress', '1');
+    }
+  } catch {}
   addEventListener('hashchange', route);
 
   // 各サイトの収集が終わってから、発売日の目安（otokoki）の差分を取る

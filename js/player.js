@@ -42,7 +42,8 @@ export async function init() {
           <span>広告ブロック</span>
           <button class="toggle ${adblock ? 'on' : ''}" aria-label="広告ブロックのオン/オフ"></button>
         </div>
-        <div class="note">埋め込みプレイヤーが広告タブを開いたり、広告ページへ移動したりするのを防ぎます。広告ブロックを拒む提供元は自動で見分けて、次回からはブロックなしで開きます（そのときは広告タブが開くことがあるので、閉じて戻ってください）。</div>
+        <div class="note">再生時に広告のタブや広告ページが開くのを防ぎます。</div>
+        <details class="more"><summary>詳しく</summary><p class="note">埋め込みプレイヤーをサンドボックスで開き、新しいタブとページ移動を禁止します。広告ブロックを拒む提供元は自動で見分けて、次回からはブロックなしで開きます（そのときは広告のタブが開くことがあるので、閉じて戻ってください）。</p></details>
         <div class="note refused-list"></div>`;
       const list = el.querySelector('.refused-list');
       const paintRefused = () => {

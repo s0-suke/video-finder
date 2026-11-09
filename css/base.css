@@ -290,3 +290,9 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 /* 検索欄: 標準の消去ボタンは消し、独自の × を押しやすくする */
 .search input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
 .search .clear { right: 2px; top: 0; width: 40px; height: 40px; }
+
+/* 設定の「詳しく」 */
+details.more { margin-top: 4px; }
+details.more summary { font-size: 12px; color: var(--accent); cursor: pointer; list-style: none; }
+details.more summary::-webkit-details-marker { display: none; }
+details.more[open] summary { margin-bottom: 4px; }
