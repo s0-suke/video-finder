@@ -12,6 +12,11 @@
 //      結果は IndexedDB の details に { key, fetchedAt, version, found, otokoki } で保存する
 //      （見つかったら 14 日、見つからなければ 3 日は取り直さない。通信エラーは保存しない）。
 //   2. 掲載元サイトの本文（source.js の loadContent）… 説明文と場面写真。otokoki と重なる段落・画像は省く。
+//   3. レーベル公式サイトのサンプル画像 … HTML は CORS で読めないので、品番から画像 URL を組み立て、
+//      new Image() で読めたものだけ使う（読めなければ外す）。分かっている規則は previewSources() を参照。
+//
+// 画像（アイキャッチ・場面写真・サンプル画像）は重複を除いて 1 つのカルーセルにまとめる。
+// スワイプで 1 枚ずつ送り、タップで全画面表示（全画面でも左右に送れる）。
 
 import * as db from './db.js';
 import { wpGet } from './wp.js';
@@ -56,10 +61,11 @@ export function mountDetails(container, video, { onTag, onStudio } = {}) {
   // （otokoki が見つかればすぐ描き、掲載元の本文が届いたら足して描き直す）
   let oto; // undefined = 取得中、null = なし
   let src; // undefined = 取得中
+  let pre = []; // レーベルのサンプル画像（届いたら足す）
   const update = () => {
     if (oto === undefined || (oto === null && src === undefined)) return;
     try {
-      render(container, video, merge(video, oto, src || []), { onTag, onStudio });
+      render(container, video, merge(video, oto, src || [], pre), { onTag, onStudio });
     } catch (e) {
       console.warn('details:', e);
       container.innerHTML = '';
@@ -67,6 +73,11 @@ export function mountDetails(container, video, { onTag, onStudio } = {}) {
   };
   getOtokoki(video).catch(() => null).then((v) => { oto = v; update(); });
   getSources(video).catch(() => []).then((v) => { src = v; update(); });
+  getPreviews(video).catch(() => []).then((v) => {
+    if (!v.length) return;
+    pre = v;
+    update();
+  });
 }
 
 // ───────────── otokoki ─────────────
@@ -105,9 +116,7 @@ async function search(q) {
 
 // 品番 → タイトルの順に探す。どちらも一致を確かめたものだけ返す
 async function findPost(video) {
-  // 品番として抽出されていなくても、タイトル先頭の「OAV463 – 」「ACST435 – 」のような英字＋数字は品番として試す
-  const loose = !video.code && (decodeEntities(video.title).match(/^\s*([A-Z]{2,8}\d{3,8})(?=[_\s–\-:])/) || [])[1];
-  const code = video.code || loose;
+  const code = videoCode(video);
   if (code) {
     const re = codeRegExp(code);
     const hit = (await search(code)).find((p) => re.test(plain(p.title.rendered + '\n' + p.content.rendered)));
@@ -125,6 +134,11 @@ async function findPost(video) {
     if (hit) return hit;
   }
   return null;
+}
+
+// 品番として抽出されていなくても、タイトル先頭の「OAV463 – 」「ACST435 – 」のような英字＋数字は品番として試す
+function videoCode(video) {
+  return video.code || (decodeEntities(video.title).match(/^\s*([A-Z]{2,8}\d{3,8})(?=[_\s–\-:])/) || [])[1] || '';
 }
 
 // 品番の前後が英数字で続いていない箇所だけを一致とみなす（GT-272 が GT-2720 に一致しないように）
@@ -253,9 +267,90 @@ async function getSources(video) {
   return results.filter((r) => r.status === 'fulfilled').map((r) => r.value);
 }
 
+// ───────────── レーベルのサンプル画像 ─────────────
+//
+// 調べた規則（2026-11 時点。Referer があると 403 になるサイトがあるので、読むときは必ず no-referrer）
+//   HUNK CHANNEL（hunk-ch.com。G@MES・西麻布撮影所・CRUISING など多数のレーベルを扱う）
+//     https://www.hunk-ch.com/video/img/{接頭辞}/{品番}/{品番}_big01.jpg 〜 _big20 前後
+//     品番は小文字。DL 版は「cr-0885_dl」、G@MES 系（OAV・OGP・DT など）は「gv/gv-oav463(_dl)」の形になる
+//   ACCEED（acceed.jp）
+//     https://acceed.jp/pic_base/product/ACST435/thumb/ACST435_001_b.jpg 〜 _044_b（853×480）
+//   Men's Rush.TV（mensrush.tv）… 場面写真の URL は連番でない ID を含むので組み立てられない。ジャケットだけ取れる
+//     https://img.mensrush.tv/goods/gt-2720_dl/gt-2720_dl.webp
+
+const PREVIEW_CHUNK = 12; // 連番の画像を一度に確かめる枚数
+const previewMemo = new Map(); // video.key -> Promise<string[]>
+
+function getPreviews(video) {
+  if (!previewMemo.has(video.key)) previewMemo.set(video.key, loadPreviews(video));
+  return previewMemo.get(video.key);
+}
+
+// 品番から試す画像の候補。at(i) は i 枚目（1 始まり）の URL
+function previewSources(rawCode) {
+  // 「OAV463」「MR-KR2391」「CR-0885_DL」→ 接頭辞と残りに分ける
+  const m = String(rawCode).normalize('NFKC').toUpperCase().replace(/[_-]DL$/, '')
+    .match(/^([A-Z]{2,8})[-_ ]?([A-Z]{0,6}[-_]?\d{2,8})$/);
+  if (!m) return [];
+  const prefix = m[1].toLowerCase();
+  const rest = m[2].toLowerCase().replace(/_/g, '-');
+  const code = prefix + '-' + rest; // 例: cr-0885、mr-kr2391
+  const flat = (prefix + rest).replace(/-/g, ''); // 例: oav463
+  const pad = (i, n) => String(i).padStart(n, '0');
+  const hunk = (dir, base) => (i) => `https://www.hunk-ch.com/video/img/${dir}/${base}/${base}_big${pad(i, 2)}.jpg`;
+  const list = [
+    // 同じ作品の置き場所の候補。最初に見つかった 1 つだけ使う
+    { group: 'hunk', max: 30, at: hunk(prefix, code) },
+    { group: 'hunk', max: 30, at: hunk(prefix, code + '_dl') },
+    { group: 'hunk', max: 30, at: hunk('gv', 'gv-' + flat) },
+    { group: 'hunk', max: 30, at: hunk('gv', 'gv-' + flat + '_dl') },
+    { group: 'mensrush', max: 1, at: () => `https://img.mensrush.tv/goods/${code}_dl/${code}_dl.webp` },
+  ];
+  // ACCEED は存在しないと 160KB の HTML が返るので、ACCEED の品番だけ試す
+  if (/^ac/.test(prefix)) {
+    const up = flat.toUpperCase();
+    list.push({ group: 'acceed', max: 48, at: (i) => `https://acceed.jp/pic_base/product/${up}/thumb/${up}_${pad(i, 3)}_b.jpg` });
+  }
+  return list;
+}
+
+async function loadPreviews(video) {
+  const list = previewSources(videoCode(video));
+  if (!list.length) return [];
+  // まず各候補の 1 枚目を同時に確かめ、グループごとに最初に見つかった候補を使う
+  const firsts = await Promise.all(list.map((s) => probeImage(s.at(1))));
+  const chosen = new Map();
+  list.forEach((s, i) => { if (firsts[i] && !chosen.has(s.group)) chosen.set(s.group, s); });
+  const results = await Promise.all([...chosen.values()].map(async (s) => {
+    const urls = [s.at(1)];
+    // 2 枚目以降は PREVIEW_CHUNK 枚ずつ確かめ、欠けが出たらそこで終わり
+    for (let start = 2; start <= s.max; start += PREVIEW_CHUNK) {
+      const idx = [];
+      for (let i = start; i < start + PREVIEW_CHUNK && i <= s.max; i++) idx.push(i);
+      const ok = await Promise.all(idx.map((i) => probeImage(s.at(i))));
+      idx.forEach((i, k) => { if (ok[k]) urls.push(s.at(i)); });
+      if (ok.some((v) => !v)) break;
+    }
+    return urls;
+  }));
+  return results.flat();
+}
+
+// 画像として読めて、アイコンでない大きさなら true（ブラウザのキャッシュに載るので、表示するときは再取得しない）
+function probeImage(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const timer = setTimeout(() => { img.src = ''; resolve(false); }, 15000);
+    img.referrerPolicy = 'no-referrer';
+    img.onload = () => { clearTimeout(timer); resolve(img.naturalWidth >= 160 && img.naturalHeight >= 90); };
+    img.onerror = () => { clearTimeout(timer); resolve(false); };
+    img.src = url;
+  });
+}
+
 // ───────────── まとめ ─────────────
 
-function merge(video, otokoki, sources) {
+function merge(video, otokoki, sources, previews = []) {
   // 説明文: otokoki → 各掲載元の順。すでに含まれている段落は省く
   const paras = [];
   let seen = normalizeTitle(video.title) + '|';
@@ -272,7 +367,7 @@ function merge(video, otokoki, sources) {
   if (otokoki) add(otokoki.description);
   for (const s of sources) add(s.description);
 
-  // 画像: otokoki のアイキャッチ → 掲載元の画像。上に大きく出ているサムネイルと同じものは省く
+  // 画像: otokoki のアイキャッチ → 掲載元の画像 → レーベルのサンプル画像。上に大きく出ているサムネイルと同じものは省く
   const images = [];
   // 同じ画像が別サイトに別名で置かれていることが多い（GT-2810.jpg / gt-2810_dl.jpg / GT-2810-400x225.webp）ので、ファイル名で比べる
   const key = (u) => {
@@ -292,6 +387,7 @@ function merge(video, otokoki, sources) {
   };
   if (otokoki) addImg(otokoki.image);
   for (const s of sources) s.images.forEach(addImg);
+  previews.forEach(addImg);
 
   // 一覧のタグと同じものはチップに出さない（詳細シートの下に既に出ている）
   const tagSet = new Set((video.tags || []).map(normalizeTitle));
@@ -306,26 +402,41 @@ function merge(video, otokoki, sources) {
 
 function skeletonHTML() {
   return `<div class="dt-skeleton" aria-hidden="true">
+    <div class="dt-sk-slide"></div>
     <div class="dt-sk-line"></div><div class="dt-sk-line"></div><div class="dt-sk-line short"></div>
-    <div class="dt-sk-gallery"><div></div><div></div><div></div></div>
   </div>`;
 }
 
+const dropped = new WeakMap(); // container -> 読めなかった画像の URL（描き直しても出さない）
+
 function render(container, video, info, { onTag, onStudio }) {
   const { description, images, groups, link } = info;
-  if (!description && !images.length && !groups.length && !link) {
+  const bad = dropped.get(container) || new Set();
+  dropped.set(container, bad);
+  const shown = images.filter((u) => !bad.has(u));
+  if (!description && !shown.length && !groups.length && !link) {
     container.innerHTML = '';
+    delete container.dataset.dtSig;
+    return;
+  }
+  // 画像以外が前回と同じなら、カルーセルに画像を足すだけにする（スワイプ中に描き直して位置が飛ばないように）
+  const sig = JSON.stringify([description, groups, link]);
+  if (container.dataset.dtSig === sig && container.querySelector('.dt-carousel')) {
+    syncSlides(container, shown);
     return;
   }
   const wasOpen = !!container.querySelector('.dt-desc.open');
+  const current = currentSlideUrl(container);
+  container.dataset.dtSig = sig;
   container.innerHTML = `
+    <div class="dt-carousel hidden">
+      <div class="dt-track" data-role="track"></div>
+      <div class="dt-count" data-role="count"></div>
+      <div class="dt-dots" data-role="dots"></div>
+    </div>
     ${description ? `
       <div class="dt-desc" data-role="desc">${esc(description).replace(/\n/g, '<br>')}</div>
       <button class="dt-more hidden" data-role="more">続きを読む</button>` : ''}
-    ${images.length ? `
-      <div class="dt-gallery">${images.map((u, i) => `
-        <button class="dt-shot" data-dt-shot="${i}"><img src="${esc(u)}" loading="lazy" referrerpolicy="no-referrer" alt=""></button>`).join('')}
-      </div>` : ''}
     ${groups.map((g) => `
       <div class="dt-group">
         <div class="dt-label">${esc(g.label)}</div>
@@ -344,16 +455,10 @@ function render(container, video, info, { onTag, onStudio }) {
     more.textContent = '閉じる';
   }
 
-  // 小さすぎる画像（アイコン類）や読めない画像はギャラリーから外す
-  container.querySelectorAll('.dt-shot img').forEach((img) => {
-    const drop = () => {
-      img.parentElement.remove();
-      const g = container.querySelector('.dt-gallery');
-      if (g && !g.children.length) g.remove();
-    };
-    img.addEventListener('error', drop);
-    img.addEventListener('load', () => { if (img.naturalWidth < 160 || img.naturalHeight < 90) drop(); });
-  });
+  const track = container.querySelector('[data-role="track"]');
+  track.addEventListener('scroll', () => updateIndicator(container), { passive: true });
+  syncSlides(container, shown);
+  if (current) goToSlide(container, slideUrls(container).indexOf(current));
 
   container.onclick = (e) => {
     if (e.target.closest('[data-role="more"]')) {
@@ -361,11 +466,13 @@ function render(container, video, info, { onTag, onStudio }) {
       more.textContent = open ? '閉じる' : '続きを読む';
       return;
     }
-    const shot = e.target.closest('[data-dt-shot]');
-    if (shot) {
-      const urls = [...container.querySelectorAll('.dt-shot img')].map((img) => img.getAttribute('src'));
-      const i = urls.indexOf(shot.querySelector('img').getAttribute('src'));
-      return openLightbox(urls, Math.max(0, i));
+    const dot = e.target.closest('[data-dt-dot]');
+    if (dot) return goToSlide(container, Number(dot.dataset.dtDot), true);
+    const slide = e.target.closest('[data-dt-slide]');
+    if (slide) {
+      const urls = slideUrls(container);
+      const i = urls.indexOf(slide.dataset.dtSlide);
+      return openLightbox(urls, Math.max(0, i), (n) => goToSlide(container, n));
     }
     const chip = e.target.closest('[data-dt-chip]');
     if (chip) {
@@ -378,6 +485,83 @@ function render(container, video, info, { onTag, onStudio }) {
       if (onTag) onTag(searchQuery(name));
     }
   };
+}
+
+// ───────────── カルーセル ─────────────
+
+const slideUrls = (container) => [...container.querySelectorAll('[data-dt-slide]')].map((s) => s.dataset.dtSlide);
+
+function slideIndex(container) {
+  const track = container.querySelector('[data-role="track"]');
+  return track && track.clientWidth ? Math.round(track.scrollLeft / track.clientWidth) : 0;
+}
+
+function currentSlideUrl(container) {
+  return slideUrls(container)[slideIndex(container)] || null;
+}
+
+function goToSlide(container, i, smooth = false) {
+  const track = container.querySelector('[data-role="track"]');
+  if (!track || i < 0) return;
+  track.scrollTo({ left: i * track.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  updateIndicator(container);
+}
+
+// まだ無い画像をカルーセルの末尾に足す（並びは merge の順）
+function syncSlides(container, urls) {
+  const track = container.querySelector('[data-role="track"]');
+  if (!track) return;
+  const have = new Set(slideUrls(container));
+  const bad = dropped.get(container);
+  for (const u of urls) {
+    if (have.has(u) || bad.has(u)) continue;
+    const slide = document.createElement('button');
+    slide.className = 'dt-slide';
+    slide.dataset.dtSlide = u;
+    slide.setAttribute('aria-label', '画像を拡大');
+    const img = document.createElement('img');
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.decoding = 'async';
+    // 小さすぎる画像（アイコン類）や読めない画像はカルーセルから外す
+    const drop = () => {
+      const at = slideIndex(container);
+      const pos = slideUrls(container).indexOf(u);
+      bad.add(u);
+      slide.remove();
+      if (pos >= 0 && pos < at) goToSlide(container, at - 1); // 見ている画像がずれないように
+      refreshCarousel(container);
+    };
+    img.addEventListener('error', drop);
+    img.addEventListener('load', () => { if (img.naturalWidth < 160 || img.naturalHeight < 90) drop(); });
+    img.src = u;
+    slide.appendChild(img);
+    track.appendChild(slide);
+  }
+  refreshCarousel(container);
+}
+
+// 枚数が変わったら、表示の有無・ドット・「n / N」を作り直す
+function refreshCarousel(container) {
+  const box = container.querySelector('.dt-carousel');
+  if (!box) return;
+  const n = slideUrls(container).length;
+  box.classList.toggle('hidden', n === 0);
+  box.classList.toggle('single', n <= 1);
+  const dots = box.querySelector('[data-role="dots"]');
+  // ドットは並べきれる枚数のときだけ（多いときは「n / N」だけ）
+  dots.innerHTML = n > 1 && n <= 15
+    ? Array.from({ length: n }, (_, i) => `<button class="dt-dot" data-dt-dot="${i}" aria-label="${i + 1} 枚目"></button>`).join('')
+    : '';
+  updateIndicator(container);
+}
+
+function updateIndicator(container) {
+  const n = slideUrls(container).length;
+  const i = Math.min(slideIndex(container), Math.max(0, n - 1));
+  const count = container.querySelector('[data-role="count"]');
+  if (count) count.textContent = n > 1 ? `${i + 1} / ${n}` : '';
+  container.querySelectorAll('.dt-dot').forEach((d, k) => d.classList.toggle('on', k === i));
 }
 
 // チップの名前から、一覧の検索でいちばん多く引っかかる言葉を選ぶ
@@ -403,29 +587,41 @@ function searchQuery(name) {
 }
 
 // 画像を全画面で表示する（横スワイプで前後へ。タップか ✕ で閉じる）
-function openLightbox(urls, start) {
+// 閉じたら onClose(最後に見ていた番号) を呼ぶ（カルーセルの位置を合わせる）
+function openLightbox(urls, start, onClose) {
   const box = document.createElement('div');
   box.className = 'dt-lightbox';
   box.innerHTML = `
     <div class="dt-lb-track">${urls.map((u) => `<div class="dt-lb-item"><img src="${esc(u)}" referrerpolicy="no-referrer" alt=""></div>`).join('')}</div>
     <button class="dt-lb-close" aria-label="閉じる">✕</button>
-    ${urls.length > 1 ? `<div class="dt-lb-count"><span data-role="n">${start + 1}</span> / ${urls.length}</div>` : ''}`;
+    ${urls.length > 1 ? `
+      <button class="dt-lb-nav prev" data-dir="-1" aria-label="前の画像">‹</button>
+      <button class="dt-lb-nav next" data-dir="1" aria-label="次の画像">›</button>
+      <div class="dt-lb-count"><span data-role="n">${start + 1}</span> / ${urls.length}</div>` : ''}`;
   document.body.appendChild(box);
   const track = box.querySelector('.dt-lb-track');
   track.scrollLeft = start * track.clientWidth;
   const counter = box.querySelector('[data-role="n"]');
+  const index = () => Math.round(track.scrollLeft / track.clientWidth);
   track.addEventListener('scroll', () => {
-    if (counter) counter.textContent = Math.round(track.scrollLeft / track.clientWidth) + 1;
+    if (counter) counter.textContent = index() + 1;
   }, { passive: true });
 
   const close = () => {
     removeEventListener('popstate', close);
     box.classList.remove('open');
+    if (onClose) onClose(index());
     setTimeout(() => box.remove(), 200);
   };
   // 戻る操作でシートごと閉じたときも一緒に消す
   addEventListener('popstate', close);
   box.addEventListener('click', (e) => {
+    const nav = e.target.closest('.dt-lb-nav');
+    if (nav) {
+      const to = Math.min(urls.length - 1, Math.max(0, index() + Number(nav.dataset.dir)));
+      track.scrollTo({ left: to * track.clientWidth, behavior: 'smooth' });
+      return;
+    }
     if (e.target.closest('.dt-lb-close') || !e.target.closest('img')) close();
   });
   requestAnimationFrame(() => box.classList.add('open'));

@@ -5,7 +5,7 @@
 
 /* 読み込み中 */
 .dt-skeleton { display: grid; gap: 8px; }
-.dt-sk-line, .dt-sk-gallery > div {
+.dt-sk-line, .dt-sk-slide {
   border-radius: 6px;
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
   background-size: 200% 100%;
@@ -13,8 +13,7 @@
 }
 .dt-sk-line { height: 12px; }
 .dt-sk-line.short { width: 60%; }
-.dt-sk-gallery { display: flex; gap: 8px; margin-top: 6px; overflow: hidden; }
-.dt-sk-gallery > div { flex: none; width: 140px; aspect-ratio: 16 / 10; border-radius: 10px; }
+.dt-sk-slide { aspect-ratio: 16 / 9; border-radius: 12px; margin-bottom: 4px; }
 @keyframes dt-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* 説明文（長いときは 5 行で折りたたむ） */
@@ -25,17 +24,34 @@
 .dt-desc.open { display: block; -webkit-line-clamp: unset; }
 .dt-more { background: none; border: 0; padding: 4px 0; color: var(--accent); font-size: 13px; }
 
-/* 画像ギャラリー（横スクロール） */
-.dt-gallery {
-  display: flex; gap: 8px; overflow-x: auto; margin: 12px -16px 0; padding: 0 16px;
+/* 画像カルーセル（1 枚ずつスワイプ。上のサムネイルと同じ 16:9） */
+.dt-carousel { position: relative; margin-bottom: 12px; }
+.dt-track {
+  display: flex; overflow-x: auto; border-radius: 12px; background: #000;
   scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
-.dt-gallery::-webkit-scrollbar { display: none; }
-.dt-shot {
-  flex: none; height: 96px; padding: 0; border: 0; border-radius: 10px; overflow: hidden;
-  background: var(--surface-2); scroll-snap-align: start;
+.dt-track::-webkit-scrollbar { display: none; }
+.dt-slide {
+  flex: none; width: 100%; aspect-ratio: 16 / 9; padding: 0; border: 0; background: #000;
+  scroll-snap-align: center; scroll-snap-stop: always;
 }
-.dt-shot img { height: 100%; width: auto; max-width: 240px; min-width: 96px; object-fit: cover; display: block; }
+.dt-slide img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.dt-count {
+  position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 10px;
+  background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.dt-count:empty { display: none; }
+.dt-dots { display: flex; justify-content: center; flex-wrap: wrap; gap: 0; margin-top: 2px; }
+.dt-dots:empty { display: none; }
+.dt-dot {
+  width: 16px; height: 16px; padding: 0; border: 0; background: none; display: grid; place-items: center;
+}
+.dt-dot::before {
+  content: ''; width: 6px; height: 6px; border-radius: 3px; background: var(--border); transition: background .15s;
+}
+.dt-dot.on::before { background: var(--accent); }
 
 /* 出演者・ジャンルなどのチップ */
 .dt-group { margin-top: 12px; }
@@ -68,6 +84,14 @@
   position: absolute; top: calc(10px + var(--safe-top)); right: 12px; width: 40px; height: 40px;
   border-radius: 20px; border: 0; background: rgba(255,255,255,.14); color: #fff; font-size: 18px;
 }
+.dt-lb-nav {
+  position: absolute; top: 50%; width: 40px; height: 56px; margin-top: -28px; border: 0;
+  background: rgba(255,255,255,.1); color: #fff; font-size: 28px; line-height: 1;
+}
+.dt-lb-nav.prev { left: 0; border-radius: 0 10px 10px 0; }
+.dt-lb-nav.next { right: 0; border-radius: 10px 0 0 10px; }
+/* タッチ操作の端末ではスワイプで送るので出さない */
+@media (hover: none) { .dt-lb-nav { display: none; } }
 .dt-lb-count {
   position: absolute; left: 0; right: 0; bottom: calc(12px + var(--safe-bottom)); text-align: center;
   color: rgba(255,255,255,.8); font-size: 13px;
