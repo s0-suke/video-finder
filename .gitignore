@@ -1,0 +1,5 @@
+# サーバー版の収集データとログ（公開リポジトリには含めない）
+server/data.db*
+server/logs/
+server/server.log
+.DS_Store

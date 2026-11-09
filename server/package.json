@@ -1,0 +1,10 @@
+{
+  "name": "video-finder",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "service:install": "bash scripts/install-service.sh",
+    "service:uninstall": "bash scripts/uninstall-service.sh",
+    "service:restart": "launchctl kickstart -k gui/$(id -u)/local.videofinder"
+  }
+}

@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e0e10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Videos">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/icon-180.png">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="referrer" content="no-referrer">
+<title>Video Finder</title>
+<style>
+:root {
+  --bg: #0e0e10;
+  --surface: #18181b;
+  --surface-2: #232328;
+  --border: #2e2e35;
+  --text: #ececf1;
+  --muted: #9a9aa6;
+  --accent: #8b7cf6;
+  --accent-text: #fff;
+  --danger: #ef5b5b;
+  --ok: #4ade80;
+  --radius: 12px;
+  --safe-top: env(safe-area-inset-top);
+  --safe-bottom: env(safe-area-inset-bottom);
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Segoe UI", system-ui, sans-serif;
+  font-size: 15px; line-height: 1.45;
+  padding-bottom: calc(24px + var(--safe-bottom));
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+a { color: var(--accent); }
+
+header {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(14,14,16,.92); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  padding: calc(10px + var(--safe-top)) 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.bar { display: flex; gap: 8px; align-items: center; }
+.search { flex: 1; position: relative; }
+.search input {
+  width: 100%; height: 40px; border-radius: 20px; border: 1px solid var(--border);
+  background: var(--surface); padding: 0 36px 0 14px; font-size: 16px; outline: none;
+}
+.search input:focus { border-color: var(--accent); }
+.search .clear { position: absolute; right: 6px; top: 6px; width: 28px; height: 28px; border: 0; background: none; color: var(--muted); font-size: 18px; display: none; }
+.icon-btn {
+  width: 40px; height: 40px; flex: none; border-radius: 20px; border: 1px solid var(--border);
+  background: var(--surface); display: grid; place-items: center; position: relative;
+}
+.icon-btn svg { width: 20px; height: 20px; }
+.icon-btn .dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 4px; background: var(--accent); display: none; }
+.icon-btn.active .dot { display: block; }
+
+.chips { display: flex; gap: 6px; overflow-x: auto; margin-top: 10px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex: none; height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid var(--border);
+  background: var(--surface); font-size: 13px; color: var(--muted); white-space: nowrap;
+}
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+
+.meta-line { color: var(--muted); font-size: 12px; padding: 10px 12px 0; }
+
+.grid {
+  display: grid; gap: 12px 10px; padding: 10px 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 640px) { .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1280px) { .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+
+.card { background: none; border: 0; padding: 0; text-align: left; display: block; width: 100%; }
+.thumb {
+  position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--surface-2);
+}
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.badge {
+  position: absolute; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px;
+  background: rgba(0,0,0,.72); color: #fff;
+}
+.badge.code { left: 6px; bottom: 6px; }
+.badge.multi { right: 6px; top: 6px; background: var(--accent); }
+.card .title {
+  margin-top: 6px; font-size: 13px; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.state { text-align: center; color: var(--muted); padding: 32px 16px; font-size: 14px; }
+
+/* シート（詳細・フィルタ） */
+.backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 20; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.backdrop.open { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 21;
+  max-height: 92vh; overflow-y: auto; overscroll-behavior: contain;
+  background: var(--surface); border-radius: 18px 18px 0 0;
+  transform: translateY(100%); transition: transform .25s ease;
+  padding: 8px 16px calc(20px + var(--safe-bottom));
+}
+@media (min-width: 720px) { .sheet { left: 50%; right: auto; width: 680px; margin-left: -340px; } }
+.sheet.open { transform: translateY(0); }
+.grabber { width: 36px; height: 5px; border-radius: 3px; background: var(--border); margin: 0 auto 12px; }
+.sheet h2 { font-size: 17px; margin: 10px 0 4px; line-height: 1.4; }
+.sheet .hero { aspect-ratio: 16/9; border-radius: 12px; overflow: hidden; background: #000; }
+.sheet .hero img, .sheet .hero iframe { width: 100%; height: 100%; object-fit: contain; border: 0; display: block; }
+.kv { color: var(--muted); font-size: 13px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.tag { height: 28px; padding: 0 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); font-size: 12px; color: var(--text); }
+.section-title { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 18px 0 8px; }
+.source { background: var(--surface-2); border-radius: var(--radius); padding: 12px; margin-bottom: 8px; }
+.source .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.source .name { font-weight: 600; font-size: 14px; }
+.btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.btn {
+  height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border);
+  background: var(--surface); font-size: 13px; display: inline-flex; align-items: center; text-decoration: none; color: var(--text);
+}
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; }
+
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.field select, .field input[type=text], .field input[type=url] {
+  width: 100%; height: 42px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface-2); padding: 0 12px; font-size: 16px;
+}
+.seg { display: flex; background: var(--surface-2); border-radius: 10px; padding: 3px; }
+.seg button { flex: 1; height: 36px; border: 0; background: none; border-radius: 8px; color: var(--muted); }
+.seg button.on { background: var(--surface); color: var(--text); }
+.switch { display: flex; align-items: center; justify-content: space-between; height: 42px; }
+.toggle { width: 46px; height: 28px; border-radius: 14px; background: var(--border); border: 0; position: relative; transition: background .2s; flex: none; }
+.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 11px; background: #fff; transition: left .2s; }
+.toggle.on { background: var(--accent); }
+.toggle.on::after { left: 21px; }
+
+/* 設定画面 */
+.page { padding: 12px; max-width: 720px; margin: 0 auto; }
+.page h1 { font-size: 20px; margin: 4px 0 16px; display: flex; align-items: center; gap: 8px; }
+.site { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-bottom: 10px; }
+.site .row { display: flex; align-items: center; gap: 10px; }
+.site .info { flex: 1; min-width: 0; }
+.site .host { font-weight: 600; word-break: break-all; }
+.site .status { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.site .status.err { color: var(--danger); }
+.add { display: flex; gap: 8px; margin: 16px 0; }
+.add input { flex: 1; height: 42px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); padding: 0 12px; font-size: 16px; min-width: 0; }
+.note { font-size: 12px; color: var(--muted); }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- 一覧 -->
+<div id="view-list">
+  <header>
+    <div class="bar">
+      <div class="search">
+        <input id="q" type="search" placeholder="タイトル・品番・タグで検索" enterkeyhint="search" autocomplete="off">
+        <button class="clear" id="q-clear" aria-label="クリア">×</button>
+      </div>
+      <button class="icon-btn" id="filter-btn" aria-label="絞り込み">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+        <span class="dot"></span>
+      </button>
+      <a class="icon-btn" href="#settings" aria-label="設定" style="color:inherit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </a>
+    </div>
+    <div class="chips" id="site-chips"></div>
+  </header>
+  <div class="meta-line" id="meta"></div>
+  <div class="grid" id="grid"></div>
+  <div class="state" id="list-state"></div>
+  <div id="sentinel" style="height:1px"></div>
+</div>
+
+<!-- 設定 -->
+<div id="view-settings" class="hidden">
+  <header>
+    <div class="bar">
+      <a class="icon-btn" href="#" aria-label="戻る" style="color:inherit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+      </a>
+      <div style="font-weight:600;font-size:17px">設定</div>
+    </div>
+  </header>
+  <div class="page">
+    <div class="section-title">収集対象サイト</div>
+    <div id="sites"></div>
+    <form class="add" id="add-form">
+      <input id="add-url" type="url" placeholder="https://example.com/" required>
+      <button class="btn primary" type="submit">追加</button>
+    </form>
+    <p class="note">WordPress系のサイトに対応しています（/wp-json/ のAPIから取得）。追加後に「収集」を押してください。</p>
+
+    <div class="section-title">収集</div>
+    <div class="site">
+      <div class="status" id="collect-status"></div>
+      <div class="btn-row">
+        <button class="btn primary" id="collect-all">新着を収集</button>
+        <button class="btn" id="collect-full">全件を再収集</button>
+      </div>
+      <div class="field" style="margin:14px 0 0"><label>自動クローリングの間隔</label>
+        <select id="interval">
+          <option value="0">停止</option><option value="15">15分ごと</option><option value="30">30分ごと</option>
+          <option value="60">1時間ごと</option><option value="180">3時間ごと</option><option value="360">6時間ごと</option>
+          <option value="720">12時間ごと</option><option value="1440">1日ごと</option>
+        </select>
+      </div>
+      <p class="note" style="margin-bottom:0" id="next-run"></p>
+    </div>
+  </div>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet"></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const api = (p, opt) => fetch(p, opt).then((r) => r.json());
+
+const PAGE = 40;
+const saved = (() => { try { return JSON.parse(localStorage.getItem('filters') || '{}'); } catch { return {}; } })();
+const filters = { q: '', site: '', studio: '', sort: 'new', multi: '', ...saved };
+let offset = 0, total = 0, loading = false, done = false, reqId = 0;
+let sites = [];
+const items = [];
+
+function saveFilters() {
+  try { localStorage.setItem('filters', JSON.stringify(filters)); } catch {}
+  $('#filter-btn').classList.toggle('active', !!(filters.studio || filters.sort !== 'new' || filters.multi));
+}
+
+function fmtDate(d) { return d ? d.slice(0, 10).replace(/-/g, '/') : ''; }
+
+function cardHTML(v, i) {
+  const n = new Set(v.sources.map((s) => s.site)).size;
+  return `<button class="card" data-i="${i}">
+    <div class="thumb">
+      ${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : ''}
+      ${v.code ? `<span class="badge code">${esc(v.code)}</span>` : ''}
+      ${n > 1 ? `<span class="badge multi">${n}サイト</span>` : ''}
+    </div>
+    <div class="title">${esc(v.title)}</div>
+    <div class="sub">${esc(fmtDate(v.date))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
+  </button>`;
+}
+
+async function load(reset) {
+  if (reset) {
+    offset = 0; done = false; items.length = 0;
+    $('#grid').innerHTML = '';
+    window.scrollTo(0, 0);
+  }
+  if (loading && !reset) return;
+  if (done) return;
+  loading = true;
+  const my = ++reqId;
+  $('#list-state').textContent = '読み込み中…';
+  const p = new URLSearchParams({ ...filters, offset, limit: PAGE });
+  const r = await api('/api/videos?' + p);
+  if (my !== reqId) return;
+  total = r.total;
+  const start = items.length;
+  items.push(...r.items);
+  $('#grid').insertAdjacentHTML('beforeend', r.items.map((v, k) => cardHTML(v, start + k)).join(''));
+  offset += r.items.length;
+  done = r.items.length < PAGE;
+  loading = false;
+  $('#meta').textContent = `${total.toLocaleString()} 件`;
+  $('#list-state').textContent = total === 0 ? '該当する動画がありません' : done ? '' : '';
+  if (!done && $('#sentinel').getBoundingClientRect().top < innerHeight + 600) load();
+}
+
+new IntersectionObserver((e) => { if (e[0].isIntersecting && !loading) load(); }, { rootMargin: '800px' }).observe($('#sentinel'));
+
+// 検索
+let qTimer;
+$('#q').value = filters.q;
+$('#q-clear').style.display = filters.q ? 'block' : 'none';
+$('#q').addEventListener('input', () => {
+  $('#q-clear').style.display = $('#q').value ? 'block' : 'none';
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => { filters.q = $('#q').value.trim(); saveFilters(); load(true); }, 350);
+});
+$('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#q').blur(); });
+$('#q-clear').onclick = () => { $('#q').value = ''; $('#q').dispatchEvent(new Event('input')); };
+
+function setQuery(q) {
+  $('#q').value = q; filters.q = q; saveFilters();
+  $('#q-clear').style.display = q ? 'block' : 'none';
+  closeSheet(); load(true);
+}
+
+// サイトチップ
+function renderChips() {
+  const enabled = sites.filter((s) => s.enabled);
+  $('#site-chips').innerHTML =
+    `<button class="chip ${!filters.site ? 'on' : ''}" data-site="">すべて</button>` +
+    enabled.map((s) => `<button class="chip ${String(filters.site) === String(s.id) ? 'on' : ''}" data-site="${s.id}">${esc(s.name)}</button>`).join('');
+}
+$('#site-chips').onclick = (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  filters.site = b.dataset.site; saveFilters(); renderChips(); load(true);
+};
+
+// シート
+function openSheet(html) {
+  $('#sheet').innerHTML = '<div class="grabber"></div>' + html;
+  $('#sheet').scrollTop = 0;
+  $('#sheet').classList.add('open'); $('#backdrop').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeSheet() {
+  $('#sheet').classList.remove('open'); $('#backdrop').classList.remove('open');
+  document.body.style.overflow = '';
+  setTimeout(() => { if (!$('#sheet').classList.contains('open')) $('#sheet').innerHTML = ''; }, 300);
+}
+$('#backdrop').onclick = closeSheet;
+// 下スワイプで閉じる
+let ty = null;
+$('#sheet').addEventListener('touchstart', (e) => { ty = $('#sheet').scrollTop <= 0 ? e.touches[0].clientY : null; }, { passive: true });
+$('#sheet').addEventListener('touchend', (e) => { if (ty != null && e.changedTouches[0].clientY - ty > 90) closeSheet(); ty = null; });
+
+$('#grid').onclick = (e) => {
+  const c = e.target.closest('.card'); if (!c) return;
+  const v = items[+c.dataset.i];
+  openSheet(`
+    <div class="hero" id="hero">${v.thumb ? `<img src="${esc(v.thumb)}" referrerpolicy="no-referrer" alt="">` : ''}</div>
+    <h2>${esc(v.title)}</h2>
+    <div class="kv">${[v.code, v.studio, fmtDate(v.date)].filter(Boolean).map(esc).join(' · ')}</div>
+    ${v.tags.length ? `<div class="tags">${v.tags.map((t) => `<button class="tag" data-q="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
+    <div class="section-title">掲載サイト（${v.sources.length}）</div>
+    ${v.sources.map((s) => `
+      <div class="source">
+        <div class="head"><span class="name">${esc(s.site)}</span></div>
+        <div class="btn-row">
+          ${s.embeds.map((u, k) => `<button class="btn primary" data-embed="${esc(u)}">▶ 再生${s.embeds.length > 1 ? ' ' + (k + 1) : ''}</button>`).join('')}
+          <a class="btn" href="${esc(s.link)}" target="_blank" rel="noopener noreferrer">サイトで開く ↗</a>
+        </div>
+      </div>`).join('')}
+  `);
+};
+$('#sheet').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-q]'); if (t) return setQuery(t.dataset.q);
+  const em = e.target.closest('[data-embed]');
+  if (em) {
+    $('#hero').innerHTML = `<iframe src="${esc(em.dataset.embed)}" allowfullscreen allow="autoplay; fullscreen" referrerpolicy="no-referrer"></iframe>`;
+    $('#sheet').scrollTo({ top: 0, behavior: 'smooth' });
+  }
+});
+
+// 絞り込み
+$('#filter-btn').onclick = async () => {
+  const studios = await api('/api/studios');
+  openSheet(`
+    <h2 style="margin-top:0">絞り込み</h2>
+    <div class="field"><label>並び順</label>
+      <div class="seg" id="f-sort">
+        <button data-v="new" class="${filters.sort === 'new' ? 'on' : ''}">新しい順</button>
+        <button data-v="old" class="${filters.sort === 'old' ? 'on' : ''}">古い順</button>
+      </div>
+    </div>
+    <div class="field"><label>スタジオ</label>
+      <select id="f-studio"><option value="">すべて</option>
+        ${studios.map((s) => `<option value="${esc(s.name)}" ${filters.studio === s.name ? 'selected' : ''}>${esc(s.name)}（${s.n}）</option>`).join('')}
+      </select>
+    </div>
+    <div class="field switch"><span>複数サイトに掲載されているものだけ</span>
+      <button class="toggle ${filters.multi ? 'on' : ''}" id="f-multi" aria-label="切り替え"></button>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="f-reset">リセット</button>
+      <button class="btn primary" id="f-apply" style="flex:1;justify-content:center">適用</button>
+    </div>
+  `);
+  const tmp = { sort: filters.sort, multi: filters.multi };
+  $('#f-sort').onclick = (e) => { const b = e.target.closest('button'); if (!b) return; tmp.sort = b.dataset.v; [...$('#f-sort').children].forEach((x) => x.classList.toggle('on', x === b)); };
+  $('#f-multi').onclick = (e) => { tmp.multi = tmp.multi ? '' : '1'; e.target.classList.toggle('on', !!tmp.multi); };
+  $('#f-reset').onclick = () => { Object.assign(filters, { sort: 'new', studio: '', multi: '' }); saveFilters(); closeSheet(); load(true); };
+  $('#f-apply').onclick = () => { Object.assign(filters, tmp, { studio: $('#f-studio').value }); saveFilters(); closeSheet(); load(true); };
+};
+
+// 設定
+let pollTimer;
+async function refreshSites() {
+  const r = await api('/api/sites');
+  sites = r.sites;
+  renderChips();
+  if (location.hash !== '#settings') return r;
+  $('#sites').innerHTML = sites.map((s) => `
+    <div class="site">
+      <div class="row">
+        <div class="info">
+          <div class="host">${esc(s.name)}</div>
+          <div class="status ${/^エラー/.test(s.status || '') ? 'err' : ''}">${esc(s.status || '未収集')} · ${(s.post_count || 0).toLocaleString()} 件${s.last_run ? ' · ' + new Date(s.last_run).toLocaleString('ja-JP') : ''}</div>
+        </div>
+        <button class="toggle ${s.enabled ? 'on' : ''}" data-toggle="${s.id}" aria-label="有効/無効"></button>
+      </div>
+      <div class="btn-row">
+        <button class="btn" data-collect="${s.id}" ${r.running ? 'disabled' : ''}>収集</button>
+        <a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">開く ↗</a>
+        <button class="btn danger" data-del="${s.id}">削除</button>
+      </div>
+    </div>`).join('');
+  $('#collect-status').textContent = r.running
+    ? `収集中: ${r.current || ''}（統合後 ${r.groups.toLocaleString()} 本）`
+    : `待機中（統合後 ${r.groups.toLocaleString()} 本）`;
+  $('#collect-all').disabled = $('#collect-full').disabled = r.running;
+  $('#interval').value = String(r.interval);
+  $('#next-run').textContent = r.next ? `次回の自動収集: ${new Date(r.next).toLocaleString('ja-JP')}` : '自動収集は停止中です';
+  clearTimeout(pollTimer);
+  if (r.running) pollTimer = setTimeout(refreshSites, 3000);
+  return r;
+}
+$('#sites').onclick = async (e) => {
+  const t = e.target.closest('[data-toggle]');
+  if (t) { await api('/api/sites/' + t.dataset.toggle, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: !t.classList.contains('on') }) }); return refreshSites(); }
+  const c = e.target.closest('[data-collect]');
+  if (c) { await collect({ siteId: +c.dataset.collect }); return; }
+  const d = e.target.closest('[data-del]');
+  if (d && confirm('このサイトと収集済みデータを削除しますか？')) { await api('/api/sites/' + d.dataset.del, { method: 'DELETE' }); refreshSites(); }
+};
+async function collect(body) {
+  await api('/api/collect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  setTimeout(refreshSites, 500);
+}
+$('#interval').onchange = async () => {
+  await api('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ interval: +$('#interval').value }) });
+  refreshSites();
+};
+$('#collect-all').onclick = () => collect({});
+$('#collect-full').onclick = () => { if (confirm('全ページを取り直します。時間がかかりますがよいですか？')) collect({ full: true }); };
+$('#add-form').onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await api('/api/sites', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: $('#add-url').value }) });
+  if (r.error) return alert(r.error);
+  $('#add-url').value = '';
+  refreshSites();
+};
+
+// ルーティング
+let wasSettings = false;
+function route() {
+  const s = location.hash === '#settings';
+  $('#view-list').classList.toggle('hidden', s);
+  $('#view-settings').classList.toggle('hidden', !s);
+  closeSheet();
+  if (s) { refreshSites(); window.scrollTo(0, 0); }
+  else if (wasSettings) { clearTimeout(pollTimer); load(true); }
+  wasSettings = s;
+}
+addEventListener('hashchange', route);
+
+// Service Worker は HTTPS か localhost でのみ有効（LAN の http では登録されないが、ホーム画面追加は可能）
+if ('serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
+saveFilters();
+refreshSites().then(() => { route(); if (location.hash !== '#settings') load(true); });
+</script>
+</body>
+</html>
