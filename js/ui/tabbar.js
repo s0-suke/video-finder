@@ -2,7 +2,6 @@
 //
 // - 一覧系のタブは filters.view を切り替える（設定だけ #settings に移る）
 // - いま開いているタブをもう一度押すと、一覧の先頭へ戻る（iOS の標準アプリと同じ）
-// - キーボードが出ているときは、ドックをキーボードの上に持ち上げる
 
 import { $, $$ } from '../util.js';
 import { state, on, isNew } from '../data.js';
@@ -18,7 +17,6 @@ export function renderTabs() {
   for (const b of $$('#tabbar button')) b.hidden = !!hiddenTabs[b.dataset.tab];
   const cur = current();
   for (const b of $$('#tabbar button')) b.classList.toggle('on', b.dataset.tab === cur);
-  $('#dock').classList.toggle('no-search', cur === 'settings');
   const n = state.videos.reduce((c, v) => c + (isNew(v) ? 1 : 0), 0);
   const badge = $('#new-badge');
   badge.textContent = n > 99 ? '99+' : String(n);
@@ -51,17 +49,5 @@ export function initTabbar() {
   on('data', renderTabs);
   on('features', renderTabs);
 
-  // iOS ではキーボードが出ても fixed の要素が隠れることがあるので、表示領域の変化に合わせて持ち上げる
-  const vv = window.visualViewport;
-  if (vv) {
-    const lift = () => {
-      const hidden = window.innerHeight - vv.height - vv.offsetTop;
-      $('#dock').style.transform = hidden > 80 ? `translateY(${-hidden}px)` : '';
-      // 候補は検索欄の上に開くので、見えている範囲（キーボードを除く）からはみ出さない高さにする
-      $('#suggest').style.maxHeight = Math.max(120, vv.height - $('#dock').offsetHeight - 24) + 'px';
-    };
-    vv.addEventListener('resize', lift);
-    vv.addEventListener('scroll', lift);
-  }
   renderTabs();
 }
