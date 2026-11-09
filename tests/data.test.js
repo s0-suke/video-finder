@@ -47,5 +47,26 @@ test('発売日の目安: otokoki の日付があればそれを使い、なけ�
   assert.equal(b.releaseKnown, true);
   assert.equal(c.release, '');
   assert.equal(c.releaseKnown, false);
+  assert.equal(b.releaseSrc, 'otokoki');
+  assert.equal(c.releaseSrc, '');
   state.release.byCode.clear();
+});
+
+test('発売日: 公式の配信日を otokoki より優先し、掲載元の投稿日より遅い日付は使わない', () => {
+  state.sites = [{ id: 1, name: 'a', enabled: true }];
+  state.posts = new Map([
+    ['1:1', post(1, 1, { title: '作品D', code: 'CO-ME00055', group: 'code:COME00055', date: '2026-06-05' })],
+    ['1:2', post(1, 2, { title: '作品E', code: 'GT-3', group: 'code:GT3', date: '2024-01-10' })],
+  ]);
+  state.release.byCode.set('COME00055', '2026-06-01');
+  state.release.official.set('code:COME00055', '2026-05-29');
+  state.release.official.set('key:code:GT3', '2026-11-09'); // 再販で新しくなった配信日
+  state.release.byCode.set('GT3', '2026-10-01'); // 投稿日より遅い otokoki の日付も使わない
+  rebuild();
+  const d = state.videos.find((v) => v.code === 'CO-ME00055');
+  const e = state.videos.find((v) => v.code === 'GT-3');
+  assert.deepEqual([d.release, d.releaseSrc], ['2026-05-29', 'official']);
+  assert.deepEqual([e.release, e.releaseKnown, e.releaseSrc], ['', false, '']);
+  state.release.byCode.clear();
+  state.release.official.clear();
 });

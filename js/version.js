@@ -6,9 +6,17 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.6.0';
+export const VERSION = '1.7.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.7.0',
+    date: '2026-11-10',
+    items: [
+      'COAT グループの作品は公式サイト（CK DOWNLOAD）の配信日を発売日として使うようにした',
+      '詳細の発売日に出どころ（CK 公式 / otokoki の掲載日）を表示。掲載元に載るより後の日付は使わない',
+    ],
+  },
   {
     version: '1.6.0',
     date: '2026-11-10',

@@ -16,6 +16,7 @@ import { mountPlayer } from '../player.js';
 import { favButton } from '../favorites.js';
 import { mountDetails } from '../details.js';
 import { recordView } from '../history.js';
+import { releaseSpan, releaseLabel } from '../release.js';
 import { feature } from '../features.js';
 import { openSheet, closeSheet } from './sheet.js';
 import { setQuery, setStudio } from './list.js';
@@ -27,7 +28,7 @@ let shown = null; // { video, el }
 on('release', (key) => {
   if (!shown || shown.video.key !== key) return;
   const rel = shown.el.querySelector('[data-role="release"]');
-  if (rel) rel.textContent = `発売 ${fmtDate(shown.video.release)}`;
+  if (rel) Object.assign(rel, { textContent: releaseLabel(shown.video).text, title: releaseLabel(shown.video).title });
 });
 
 // 前後の動画へ移るための並び（一覧から開いたときだけ）と、関連動画から開いたときに戻るための積み重ね
@@ -89,7 +90,7 @@ export function openDetail(video, opts = {}) {
       ${video.code ? `<span>${esc(video.code)}</span>` : ''}
       ${video.studio ? `<button class="link" data-studio="${esc(video.studioKey)}">${esc(video.studio)}</button>` : ''}
       <span>掲載 ${esc(fmtDate(video.date))}</span>
-      <span data-role="release">${video.release ? `発売 ${esc(fmtDate(video.release))}` : '発売日不明'}</span>
+      ${releaseSpan(video)}
     </div>
     <div data-role="details"></div>
     ${video.tags.length ? `<div class="tags">${video.tags.map((t) => `<button class="tag" data-q="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}

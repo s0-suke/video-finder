@@ -6,7 +6,7 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode, releaseTitleKey, stripCode, safeUrl } from './matching.js';
+import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode, releaseTitleKey, plausibleRelease, stripCode, safeUrl } from './matching.js';
 
 // 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
 const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
@@ -24,21 +24,40 @@ export const state = {
   videos: [], // 統合後（新しい順）
   byKey: new Map(), // video.key -> video
   studios: [], // { key, name, count }（本数の多い順）
-  release: { byCode: new Map(), byTitle: new Map() }, // 発売日の目安（release.js が埋める）
+  // 発売日（release.js が埋める）
+  //   official: 公式の配信日（CK DOWNLOAD）。'key:<video.key>' / 'code:<正規化した品番>' -> 日付
+  //   byCode / byTitle: otokoki の掲載日（発売日の目安）
+  release: { official: new Map(), byCode: new Map(), byTitle: new Map() },
 };
 
-// 発売日の目安: otokoki の掲載日（品番 → タイトルの順に照合）。なければ null
-function releaseOf(code, rows) {
+// 発売日の出どころ（video.releaseSrc）
+//   'official' 公式の配信日（CK DOWNLOAD） / 'otokoki' otokoki の掲載日（目安） / '' 不明
+// 公式 → otokoki（品番 → タイトルの順）の順に探す。掲載元の最初の投稿日より遅い日付は使わない（matching.js の plausibleRelease）
+function releaseOf(key, code, rows) {
+  const first = rows.reduce((d, r) => (r.date && (!d || r.date < d) ? r.date : d), '');
+  const ok = (d) => plausibleRelease(d, first);
+  const off = state.release.official.get('key:' + key) || (code && state.release.official.get('code:' + normalizeCode(code)));
+  if (ok(off)) return { date: off, src: 'official' };
   if (code) {
     const d = state.release.byCode.get(normalizeCode(code));
-    if (d) return d;
+    if (ok(d)) return { date: d, src: 'otokoki' };
   }
   for (const r of rows) {
     const k = releaseTitleKey(r.title);
     const d = k && state.release.byTitle.get(k);
-    if (d) return d;
+    if (ok(d)) return { date: d, src: 'otokoki' };
   }
   return null;
+}
+
+const releaseFields = (key, code, rows) => {
+  const r = releaseOf(key, code, rows);
+  return { release: r ? r.date : '', releaseKnown: !!r, releaseSrc: r ? r.src : '' };
+};
+
+// 発売日の対応表が増えたときに、一覧を作り直さずに 1 本だけ発売日を付け直す（release.js から使う）
+export function applyRelease(video) {
+  Object.assign(video, releaseFields(video.key, video.code, video.sources));
 }
 
 // 収集で新しく見つかってから NEW 表示にしておく期間
@@ -134,11 +153,8 @@ export function rebuild() {
       title: displayTitle(main.title, main.code), // 保存済みのタイトルに品番が残っていても表示では外す
       thumb: main.thumb,
       date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
-      // 発売日の目安（otokoki の掲載日）。照合できなければ空（不明）。掲載日では代用しない
-      ...(() => {
-        const known = releaseOf(main.code, rows);
-        return { release: known || '', releaseKnown: !!known };
-      })(),
+      // 発売日（公式の配信日 → otokoki の掲載日の順）と出どころ。照合できなければ空（不明）。掲載日では代用しない
+      ...releaseFields(key, main.code, rows),
       studio,
       studioKey: sKey,
       tags,
