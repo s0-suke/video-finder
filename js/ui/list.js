@@ -2,10 +2,10 @@
 //
 // チップ: すべて / 新着 / ♥ お気に入り / 履歴 / 上位のスタジオ / スタジオ一覧…
 
-import { $, esc, fmtDate } from '../util.js';
+import { $, esc, fmtDate, toast } from '../util.js';
 import { state, on, isNew } from '../data.js';
 import { crawl } from '../crawler.js';
-import { isFav, favAddedAt } from '../favorites.js';
+import { isFav, favAddedAt, toggleFav } from '../favorites.js';
 import { viewedAt } from '../history.js';
 import { normalizeCode } from '../matching.js';
 import { isSheetOpen } from './sheet.js';
@@ -47,6 +47,19 @@ function applyFilters() {
   if (view === 'history') filtered.sort((a, b) => viewedAt(b.key) - viewedAt(a.key));
   else if (view === 'fav') filtered.sort((a, b) => favAddedAt(b.key) - favAddedAt(a.key));
   else if (filters.sort === 'old') filtered.reverse();
+  else if (filters.sort === 'random') {
+    const r = new Map(filtered.map((v) => [v.key, hash(v.key + shuffleSeed)]));
+    filtered.sort((a, b) => r.get(a.key) - r.get(b.key));
+  }
+}
+
+// ランダム順は、起動ごと・並び順を選び直すごとに変わり、スクロール中は変わらない
+let shuffleSeed = String(Math.random());
+export const reshuffle = () => { shuffleSeed = String(Math.random()); };
+function hash(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
 }
 
 function cardHTML(v, i) {
@@ -151,9 +164,28 @@ export function initList() {
       ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
   };
 
+  // タップで詳細、長押しでお気に入りの追加/解除
+  let pressTimer = null, pressed = false;
+  $('#grid').addEventListener('touchstart', (e) => {
+    const c = e.target.closest('.card');
+    if (!c) return;
+    pressed = false;
+    pressTimer = setTimeout(async () => {
+      pressed = true;
+      const v = filtered[+c.dataset.i];
+      const added = await toggleFav(v);
+      toast(added ? '♥ お気に入りに追加しました' : 'お気に入りから外しました');
+    }, 550);
+  }, { passive: true });
+  const cancel = () => { clearTimeout(pressTimer); pressTimer = null; };
+  $('#grid').addEventListener('touchmove', cancel, { passive: true });
+  $('#grid').addEventListener('touchend', cancel);
+  $('#grid').addEventListener('contextmenu', (e) => { if (e.target.closest('.card')) e.preventDefault(); });
   $('#grid').onclick = (e) => {
     const c = e.target.closest('.card');
-    if (c) openDetail(filtered[+c.dataset.i]);
+    if (!c) return;
+    if (pressed) { pressed = false; return; } // 長押しの直後のタップは無視
+    openDetail(filtered[+c.dataset.i]);
   };
 
   // 先頭へ戻るボタン

@@ -3,7 +3,7 @@
 import { $, esc } from '../util.js';
 import { state } from '../data.js';
 import { openSheet, closeSheet } from './sheet.js';
-import { filters, saveFilters, render, renderChips } from './list.js';
+import { filters, saveFilters, render, renderChips, reshuffle } from './list.js';
 
 export function openFilters() {
   const enabled = state.sites.filter((s) => s.enabled);
@@ -13,6 +13,7 @@ export function openFilters() {
       <div class="seg" id="f-sort">
         <button data-v="new" class="${filters.sort === 'new' ? 'on' : ''}">新しい順</button>
         <button data-v="old" class="${filters.sort === 'old' ? 'on' : ''}">古い順</button>
+        <button data-v="random" class="${filters.sort === 'random' ? 'on' : ''}">ランダム</button>
       </div>
     </div>
     <div class="field"><label>スタジオ</label>
@@ -41,7 +42,7 @@ export function openFilters() {
   $('#f-reset').onclick = () => { Object.assign(filters, { sort: 'new', studio: '', site: '' }); done(); };
   $('#f-apply').onclick = () => {
     Object.assign(filters, { sort, studio: $('#f-studio').value, site: $('#f-site').value });
-    if (filters.studio) filters.fav = '';
+    if (sort === 'random') reshuffle();
     done();
   };
 }

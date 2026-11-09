@@ -64,7 +64,9 @@ header {
 @media (min-width: 960px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (min-width: 1280px) { .grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 
-.card { background: none; border: 0; padding: 0; text-align: left; display: block; width: 100%; }
+.card { background: none; border: 0; padding: 0; text-align: left; display: block; width: 100%; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.card:active .thumb { transform: scale(.97); }
+.thumb { transition: transform .15s; }
 .thumb {
   position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--surface-2);
 }
