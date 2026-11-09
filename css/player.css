@@ -20,3 +20,11 @@
 .player-bar .btn { height: 32px; padding: 0 12px; font-size: 12px; flex: none; }
 @keyframes player-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .player-dot { animation: none; } }
+
+/* 端末の広告ブロッカーで保護中 */
+.player-bar.guarded .player-dot { background: var(--ok); animation: none; }
+.player-bar .player-state { line-height: 1.4; }
+.player-ads { margin-left: 6px; color: var(--muted); font-size: 11px; }
+.blocker { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
+.blocker .switch { height: auto; gap: 10px; }
+.blocker .btn { flex: none; }
