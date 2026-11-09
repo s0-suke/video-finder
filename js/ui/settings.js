@@ -29,7 +29,7 @@ export async function renderSettings() {
       <div class="btn-row">
         <button class="btn" data-collect="${s.id}" ${crawl.running ? 'disabled' : ''}>収集</button>
         <a class="btn" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">開く ↗</a>
-        <button class="btn danger" data-del="${s.id}">削除</button>
+        <button class="btn danger" data-del="${s.id}" style="margin-left:auto">削除</button>
       </div>
     </div>`).join('');
   $('#collect-status').textContent = crawl.running

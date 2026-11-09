@@ -84,6 +84,8 @@ export function openStudioPicker() {
   };
   paint();
   q.addEventListener('input', paint);
+  // 開いたらすぐ入力できるようにする（タップの処理の中で focus するので iOS でもキーボードが出る）
+  q.focus({ preventScroll: true });
   list.onclick = (e) => {
     const b = e.target.closest('[data-key]');
     if (!b) return;
