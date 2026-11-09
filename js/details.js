@@ -15,8 +15,8 @@
 //   3. レーベル公式サイトのサンプル画像 … HTML は CORS で読めないので、品番から画像 URL を組み立て、
 //      new Image() で読めたものだけ使う（読めなければ外す）。分かっている規則は previewSources() を参照。
 //
-// 画像（アイキャッチ・場面写真・サンプル画像）は重複を除いて 1 つのカルーセルにまとめる。
-// スワイプで 1 枚ずつ送り、タップで全画面表示（全画面でも左右に送れる）。
+// 画像（アイキャッチ・場面写真・サンプル画像）は重複を除いて 2 列のグリッドにまとめる（スワイプしなくても全体が見渡せるように）。
+// 多いときは最初の SHOTS_FOLDED 枚だけ出して「すべて表示」で広げる。タップで全画面表示（全画面では左右に送れる）。
 
 import * as db from './db.js';
 import { wpGet } from './wp.js';
@@ -425,11 +425,12 @@ function merge(video, otokoki, sources, previews = []) {
 
 function skeletonHTML() {
   return `<div class="dt-skeleton" aria-hidden="true">
-    <div class="dt-sk-slide"></div>
+    <div class="dt-sk-shots"><div class="dt-sk-shot"></div><div class="dt-sk-shot"></div></div>
     <div class="dt-sk-line"></div><div class="dt-sk-line"></div><div class="dt-sk-line short"></div>
   </div>`;
 }
 
+const SHOTS_FOLDED = 8; // 画像がこれより多いときは、この枚数まで出して残りは「すべて表示」で広げる（css/details.css の nth-child(n+9) と合わせる）
 const dropped = new WeakMap(); // container -> 読めなかった画像の URL（描き直しても出さない）
 
 function render(container, video, info, { onTag, onStudio }) {
@@ -442,20 +443,19 @@ function render(container, video, info, { onTag, onStudio }) {
     delete container.dataset.dtSig;
     return;
   }
-  // 画像以外が前回と同じなら、カルーセルに画像を足すだけにする（スワイプ中に描き直して位置が飛ばないように）
+  // 画像以外が前回と同じなら、グリッドに画像を足すだけにする（描き直してスクロール位置が飛ばないように）
   const sig = JSON.stringify([description, groups, link]);
-  if (container.dataset.dtSig === sig && container.querySelector('.dt-carousel')) {
-    syncSlides(container, shown);
+  if (container.dataset.dtSig === sig && container.querySelector('.dt-shots')) {
+    syncShots(container, shown);
     return;
   }
   const wasOpen = !!container.querySelector('.dt-desc.open');
-  const current = currentSlideUrl(container);
+  const wasExpanded = !!container.querySelector('.dt-shots.expanded');
   container.dataset.dtSig = sig;
   container.innerHTML = `
-    <div class="dt-carousel hidden">
-      <div class="dt-track" data-role="track"></div>
-      <div class="dt-count" data-role="count"></div>
-      <div class="dt-dots" data-role="dots"></div>
+    <div class="dt-shots hidden${wasExpanded ? ' expanded' : ''}">
+      <div class="dt-shots-grid" data-role="grid"></div>
+      <button class="dt-all hidden" data-role="all"></button>
     </div>
     ${description ? `
       <div class="dt-desc" data-role="desc">${esc(description).replace(/\n/g, '<br>')}</div>
@@ -478,10 +478,7 @@ function render(container, video, info, { onTag, onStudio }) {
     more.textContent = '閉じる';
   }
 
-  const track = container.querySelector('[data-role="track"]');
-  track.addEventListener('scroll', () => updateIndicator(container), { passive: true });
-  syncSlides(container, shown);
-  if (current) goToSlide(container, slideUrls(container).indexOf(current));
+  syncShots(container, shown);
 
   container.onclick = (e) => {
     if (e.target.closest('[data-role="more"]')) {
@@ -489,13 +486,15 @@ function render(container, video, info, { onTag, onStudio }) {
       more.textContent = open ? '閉じる' : '続きを読む';
       return;
     }
-    const dot = e.target.closest('[data-dt-dot]');
-    if (dot) return goToSlide(container, Number(dot.dataset.dtDot), true);
-    const slide = e.target.closest('[data-dt-slide]');
-    if (slide) {
-      const urls = slideUrls(container);
-      const i = urls.indexOf(slide.dataset.dtSlide);
-      return openLightbox(urls, Math.max(0, i), (n) => goToSlide(container, n));
+    if (e.target.closest('[data-role="all"]')) {
+      container.querySelector('.dt-shots').classList.add('expanded');
+      return refreshShots(container);
+    }
+    const shot = e.target.closest('[data-dt-shot]');
+    if (shot) {
+      // 折りたたんで隠れている分も含めて全画面で送れるようにする
+      const urls = shotUrls(container);
+      return openLightbox(urls, Math.max(0, urls.indexOf(shot.dataset.dtShot)));
     }
     const chip = e.target.closest('[data-dt-chip]');
     if (chip) {
@@ -510,81 +509,53 @@ function render(container, video, info, { onTag, onStudio }) {
   };
 }
 
-// ───────────── カルーセル ─────────────
+// ───────────── サンプル画像の一覧（2 列のグリッド） ─────────────
 
-const slideUrls = (container) => [...container.querySelectorAll('[data-dt-slide]')].map((s) => s.dataset.dtSlide);
+const shotUrls = (container) => [...container.querySelectorAll('[data-dt-shot]')].map((s) => s.dataset.dtShot);
 
-function slideIndex(container) {
-  const track = container.querySelector('[data-role="track"]');
-  return track && track.clientWidth ? Math.round(track.scrollLeft / track.clientWidth) : 0;
-}
-
-function currentSlideUrl(container) {
-  return slideUrls(container)[slideIndex(container)] || null;
-}
-
-function goToSlide(container, i, smooth = false) {
-  const track = container.querySelector('[data-role="track"]');
-  if (!track || i < 0) return;
-  track.scrollTo({ left: i * track.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
-  updateIndicator(container);
-}
-
-// まだ無い画像をカルーセルの末尾に足す（並びは merge の順）
-function syncSlides(container, urls) {
-  const track = container.querySelector('[data-role="track"]');
-  if (!track) return;
-  const have = new Set(slideUrls(container));
+// まだ無い画像をグリッドの末尾に足す（並びは merge の順。既にある画像は動かさないので描き直しで位置が飛ばない）
+function syncShots(container, urls) {
+  const grid = container.querySelector('[data-role="grid"]');
+  if (!grid) return;
+  const have = new Set(shotUrls(container));
   const bad = dropped.get(container);
   for (const u of urls) {
     if (have.has(u) || bad.has(u)) continue;
-    const slide = document.createElement('button');
-    slide.className = 'dt-slide';
-    slide.dataset.dtSlide = u;
-    slide.setAttribute('aria-label', '画像を拡大');
+    const shot = document.createElement('button');
+    shot.className = 'dt-shot';
+    shot.dataset.dtShot = u;
+    shot.setAttribute('aria-label', '画像を拡大');
     const img = document.createElement('img');
     img.alt = '';
     img.referrerPolicy = 'no-referrer';
     img.decoding = 'async';
-    // 小さすぎる画像（アイコン類）や読めない画像はカルーセルから外す
+    img.loading = 'lazy'; // 折りたたんで隠れている分は「すべて表示」を押すまで読まない
+    // 小さすぎる画像（アイコン類）や読めない画像は一覧から外す
     const drop = () => {
-      const at = slideIndex(container);
-      const pos = slideUrls(container).indexOf(u);
       bad.add(u);
-      slide.remove();
-      if (pos >= 0 && pos < at) goToSlide(container, at - 1); // 見ている画像がずれないように
-      refreshCarousel(container);
+      shot.remove();
+      refreshShots(container);
     };
     img.addEventListener('error', drop);
     img.addEventListener('load', () => { if (img.naturalWidth < 160 || img.naturalHeight < 90) drop(); });
     img.src = u;
-    slide.appendChild(img);
-    track.appendChild(slide);
+    shot.appendChild(img);
+    grid.appendChild(shot);
   }
-  refreshCarousel(container);
+  refreshShots(container);
 }
 
-// 枚数が変わったら、表示の有無・ドット・「n / N」を作り直す
-function refreshCarousel(container) {
-  const box = container.querySelector('.dt-carousel');
+// 枚数が変わったら、表示の有無と「すべて表示（N 枚）」を更新する
+function refreshShots(container) {
+  const box = container.querySelector('.dt-shots');
   if (!box) return;
-  const n = slideUrls(container).length;
+  const n = shotUrls(container).length;
   box.classList.toggle('hidden', n === 0);
-  box.classList.toggle('single', n <= 1);
-  const dots = box.querySelector('[data-role="dots"]');
-  // ドットは並べきれる枚数のときだけ（多いときは「n / N」だけ）
-  dots.innerHTML = n > 1 && n <= 15
-    ? Array.from({ length: n }, (_, i) => `<button class="dt-dot" data-dt-dot="${i}" aria-label="${i + 1} 枚目"></button>`).join('')
-    : '';
-  updateIndicator(container);
-}
-
-function updateIndicator(container) {
-  const n = slideUrls(container).length;
-  const i = Math.min(slideIndex(container), Math.max(0, n - 1));
-  const count = container.querySelector('[data-role="count"]');
-  if (count) count.textContent = n > 1 ? `${i + 1} / ${n}` : '';
-  container.querySelectorAll('.dt-dot').forEach((d, k) => d.classList.toggle('on', k === i));
+  box.classList.toggle('one', n === 1);
+  const all = box.querySelector('[data-role="all"]');
+  const folded = n > SHOTS_FOLDED && !box.classList.contains('expanded');
+  all.classList.toggle('hidden', !folded);
+  all.textContent = `すべて表示（${n} 枚）`;
 }
 
 // 一覧の検索（ui/list.js）と同じ判定で、その語に当たる動画の数を数える
@@ -627,11 +598,10 @@ function searchQuery(name) {
 // 画像を全画面で表示する
 //   横スワイプ、または画面の左右の端（各 25%）のタップで前後へ。
 //   下スワイプ・下部中央の ✕・画像の外のタップ・ブラウザの戻る操作で閉じる（片手で届く位置だけで操作できるように）。
-// 閉じたら onClose(最後に見ていた番号) を呼ぶ（カルーセルの位置を合わせる）
 const EDGE = 0.25; // 左右の端としてタップを前後送りに使う幅（画面幅に対する割合）
 const SWIPE_CLOSE = 90; // この距離（px）以上下へスワイプしたら閉じる
 
-function openLightbox(urls, start, onClose) {
+function openLightbox(urls, start) {
   const box = document.createElement('div');
   box.className = 'dt-lightbox';
   box.innerHTML = `
@@ -662,7 +632,6 @@ function openLightbox(urls, start, onClose) {
     closed = true;
     removeEventListener('popstate', onPop);
     box.classList.remove('open');
-    if (onClose) onClose(index());
     setTimeout(() => box.remove(), 200);
   };
   const onPop = () => { if (!(history.state && history.state.lightbox)) finish(); };

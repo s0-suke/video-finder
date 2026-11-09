@@ -5,7 +5,7 @@
 
 /* 読み込み中 */
 .dt-skeleton { display: grid; gap: 8px; }
-.dt-sk-line, .dt-sk-slide {
+.dt-sk-line, .dt-sk-shot {
   border-radius: 6px;
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
   background-size: 200% 100%;
@@ -13,7 +13,8 @@
 }
 .dt-sk-line { height: 12px; }
 .dt-sk-line.short { width: 60%; }
-.dt-sk-slide { aspect-ratio: 16 / 9; border-radius: 12px; margin-bottom: 4px; }
+.dt-sk-shots { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 4px; }
+.dt-sk-shot { aspect-ratio: 16 / 9; border-radius: 8px; }
 @keyframes dt-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
 /* 説明文（長いときは 5 行で折りたたむ） */
@@ -24,34 +25,25 @@
 .dt-desc.open { display: block; -webkit-line-clamp: unset; }
 .dt-more { background: none; border: 0; padding: 4px 0; color: var(--accent); font-size: 13px; }
 
-/* 画像カルーセル（1 枚ずつスワイプ。上のサムネイルと同じ 16:9） */
-.dt-carousel { position: relative; margin-bottom: 12px; }
-.dt-track {
-  display: flex; overflow-x: auto; border-radius: 12px; background: #000;
-  scroll-snap-type: x mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
+/* 画像の一覧（2 列のグリッド。各画像は上のサムネイルと同じ 16:9） */
+.dt-shots { margin-bottom: 12px; }
+.dt-shots-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.dt-shot {
+  aspect-ratio: 16 / 9; padding: 0; border: 0; border-radius: 8px; overflow: hidden; background: #000;
 }
-.dt-track::-webkit-scrollbar { display: none; }
-.dt-slide {
-  flex: none; width: 100%; aspect-ratio: 16 / 9; padding: 0; border: 0; background: #000;
-  scroll-snap-align: center; scroll-snap-stop: always;
+.dt-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dt-shot:active { opacity: .7; }
+/* 1 枚だけのときは横幅いっぱいに出す */
+.dt-shots.one .dt-shots-grid { grid-template-columns: 1fr; }
+.dt-shots.one .dt-shot { border-radius: 12px; }
+.dt-shots.one .dt-shot img { object-fit: contain; }
+/* 多いときは最初の 8 枚だけ（「すべて表示」で広げる） */
+.dt-shots:not(.expanded) .dt-shot:nth-child(n+9) { display: none; }
+.dt-all {
+  display: block; width: 100%; min-height: 36px; margin-top: 6px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 13px;
 }
-.dt-slide img { width: 100%; height: 100%; object-fit: contain; display: block; }
-.dt-count {
-  position: absolute; top: 8px; right: 8px; padding: 2px 8px; border-radius: 10px;
-  background: rgba(0,0,0,.6); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums;
-  pointer-events: none;
-}
-.dt-count:empty { display: none; }
-.dt-dots { display: flex; justify-content: center; flex-wrap: wrap; gap: 0; margin-top: 2px; }
-.dt-dots:empty { display: none; }
-.dt-dot {
-  width: 16px; height: 16px; padding: 0; border: 0; background: none; display: grid; place-items: center;
-}
-.dt-dot::before {
-  content: ''; width: 6px; height: 6px; border-radius: 3px; background: var(--border); transition: background .15s;
-}
-.dt-dot.on::before { background: var(--accent); }
+.dt-all:active { border-color: var(--accent); }
 
 /* 出演者・ジャンルなどのチップ */
 .dt-group { margin-top: 12px; }
