@@ -3,7 +3,7 @@
 // otokoki.net は新作の配信に合わせて記事を出すので、その掲載日を「発売日の目安」として使う。
 // 記事のタイトルと日付だけを全件（約 4.4 万件、タイトルのみなので数 MB）取り、
 // 品番 → 日付 / 正規化したタイトル → 日付 の対応表を作る。
-// otokoki に載っていない動画は、各掲載サイトのうち最も早い掲載日で代用する（data.js の rebuild）。
+// 照合できない動画は発売日不明（掲載日では代用しない）。詳細を開いて記事が見つかれば noteRelease で記録する。
 //
 // 収集は crawler.js と同じく、新着側から差分 → 初回の全件取得（途中で止めても続きから）の順。
 
@@ -37,7 +37,7 @@ function renderSection(el) {
       <div class="switch"><span>otokoki の掲載日を発売日の目安に使う</span><button class="toggle ${enabled ? 'on' : ''}" data-act="toggle" aria-label="切り替え"></button></div>
       <div class="status">${release.running ? release.status : release.status || (state.release.byTitle.size ? `${state.release.byCode.size.toLocaleString()} 品番 / ${state.release.byTitle.size.toLocaleString()} タイトル` : 'まだ取得していません')}</div>
       <div class="btn-row"><button class="btn" data-act="refetch" ${release.running ? 'disabled' : ''}>取り直す</button></div>
-      <p class="note" style="margin-bottom:0">絞り込みの「日付の基準」で「発売日」を選ぶと、この日付で並びます。otokoki は新作の配信に合わせて記事を出すため、その掲載日を発売日の目安にしています。載っていない動画は、各サイトで最も早い掲載日で代用します。初回は記事のタイトルと日付だけを全件（数 MB）取得します。</p>`;
+      <p class="note" style="margin-bottom:0">絞り込みの「日付の基準」で「発売日」を選ぶと、この日付で並びます。otokoki は新作の配信に合わせて記事を出すため、その掲載日を発売日の目安にしています。照合できない動画は「発売日不明」となり、発売日順では後ろに並びます。動画の詳細を開いたときに otokoki の記事が見つかれば、その日付も記録します。初回は記事のタイトルと日付だけを全件（数 MB）取得します。</p>`;
     el.querySelector('[data-act="toggle"]').onclick = async () => {
       await db.kvSet('releaseEnabled', !enabled);
       if (!enabled) collectRelease({ force: true });
