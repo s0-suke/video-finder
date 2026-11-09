@@ -1,6 +1,6 @@
 # Video Finder
 
-- 本体はリポジトリ直下の PWA（`index.html` / `app.js` / `sw.js`）。ビルド工程も依存パッケージもない素の HTML/JS。
+- 本体はリポジトリ直下の PWA（`index.html` / `js/` / `css/` / `sw.js`）。ビルド工程も依存パッケージもない素の HTML/JS。
 - `main` に push すると GitHub Pages（https://s0-suke.github.io/video-finder/）に反映される。
 - 主な利用環境は iPhone の Safari（ホーム画面に追加した状態）。UI はスマホ幅を基準に作り、システムフォント・ダークテーマを保つ。
 - データはブラウザの IndexedDB だけに保存する。サーバー側に収集データを置かない（リポジトリは公開）。
