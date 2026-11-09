@@ -32,9 +32,13 @@ export function groupKey(code, title, postKey) {
   return norm.length >= 10 ? 'title:' + norm : 'post:' + postKey;
 }
 
-// スタジオ名はタグ側（品番以外）を優先、なければカテゴリ
+// スタジオ名ではない分類・告知用のタグ（igay69 の [PORN] / [LEAK] / #NEW など）
+export const isNoiseTag = (t) => /^\[.*\]$|^#|^(AAA|uncategorized|未分類)$/i.test(t.trim());
+
+// スタジオ名はタグ側（品番・分類タグ以外）を優先、なければカテゴリ
 export function pickStudio(tags, cats) {
-  return tags.find((t) => !CODE_RE.test(t)) || cats.find((c) => !/^(AAA|uncategorized|未分類)$/i.test(c)) || null;
+  const ok = (t) => !CODE_RE.test(t) && !isNoiseTag(t);
+  return tags.find(ok) || cats.find(ok) || null;
 }
 
 // 表記ゆれのあるスタジオ名（MEN'S RUSH.TV / Men's Rush.TV / Men’s Rush.TV）を同じものとして扱うためのキー

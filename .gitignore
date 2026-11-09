@@ -3,3 +3,6 @@ server/data.db*
 server/logs/
 server/server.log
 .DS_Store
+
+# エージェントの作業用 worktree
+.claude/worktrees/

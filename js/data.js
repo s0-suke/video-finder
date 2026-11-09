@@ -6,7 +6,10 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey } from './matching.js';
+import { studioKey, isNoiseTag, pickStudio } from './matching.js';
+
+// 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
+const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
 
 export const DEFAULT_SITES = [
   'https://gayvidsclub.com/',
@@ -51,7 +54,7 @@ export function rebuild() {
     rows.sort((a, b) => (b.thumb ? 1 : 0) - (a.thumb ? 1 : 0) || (a.date < b.date ? 1 : -1));
     const main = rows[0];
     const tags = [...new Set(rows.flatMap((r) => r.tags))];
-    const studio = rows.map((r) => r.studio).find(Boolean) || null;
+    const studio = rows.map(studioOf).find(Boolean) || null;
     const sKey = studio ? studioKey(studio) : null;
     if (sKey) {
       let m = studioNames.get(sKey);

@@ -46,3 +46,8 @@ test('スタジオはタグ（品番以外）を優先し、なければカテ�
 test('スタジオ名の表記ゆれを同じキーにまとめる', () => {
   assert.equal(studioKey("MEN'S RUSH.TV"), studioKey('Men’s Rush.TV'));
 });
+
+test('[PORN] や #NEW のような分類タグはスタジオにしない', () => {
+  assert.equal(pickStudio(['[PORN]', '#NEW', 'COAT'], []), 'COAT');
+  assert.equal(pickStudio(['#W.VID'], ['[LEAK]']), null);
+});
