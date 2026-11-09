@@ -33,6 +33,9 @@ export function openFilters() {
         ${enabled.map((s) => `<option value="${s.id}" ${String(filters.site) === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
       </select>
     </div>
+    <div class="field switch"><span>サムネイルのない動画を隠す<span class="note" style="display:block;font-size:11px">igay69 だけに載っている動画など（再生もできないことが多い）</span></span>
+      <button class="toggle ${filters.hideNoThumb ? 'on' : ''}" id="f-nothumb" aria-label="切り替え"></button>
+    </div>
     <div class="btn-row">
       <button class="btn" id="f-reset">リセット</button>
       <button class="btn primary" id="f-apply" style="flex:1;justify-content:center">適用</button>
@@ -40,6 +43,8 @@ export function openFilters() {
   `);
   let sort = filters.sort;
   let dateBy = filters.dateBy;
+  let hideNoThumb = filters.hideNoThumb;
+  $('#f-nothumb').onclick = (e) => { hideNoThumb = !hideNoThumb; e.target.classList.toggle('on', hideNoThumb); };
   $('#f-dateby').onclick = (e) => {
     const b = e.target.closest('button');
     if (!b) return;
@@ -53,9 +58,9 @@ export function openFilters() {
     for (const x of $('#f-sort').children) x.classList.toggle('on', x === b);
   };
   const done = () => { saveFilters(); renderChips(); closeSheet(); render(); };
-  $('#f-reset').onclick = () => { Object.assign(filters, { sort: 'new', dateBy: 'post', studio: '', site: '' }); done(); };
+  $('#f-reset').onclick = () => { Object.assign(filters, { sort: 'new', dateBy: 'post', studio: '', site: '', hideNoThumb: false }); done(); };
   $('#f-apply').onclick = () => {
-    Object.assign(filters, { sort, dateBy, studio: $('#f-studio').value, site: $('#f-site').value });
+    Object.assign(filters, { sort, dateBy, hideNoThumb, studio: $('#f-studio').value, site: $('#f-site').value });
     if (sort === 'random') reshuffle();
     done();
   };

@@ -20,13 +20,13 @@ const CHIP_STUDIOS = 15;
 // view: '' = すべて / 'new' = 新着 / 'fav' = お気に入り / 'history' = 履歴
 const saved = (() => { try { return JSON.parse(localStorage.getItem('filters3') || '{}'); } catch { return {}; } })();
 // dateBy: 'post' = 各サイトの掲載日 / 'release' = 元動画の発売日（目安。release.js）
-export const filters = { q: '', studio: '', site: '', sort: 'new', dateBy: 'post', view: '', ...saved };
+export const filters = { q: '', studio: '', site: '', sort: 'new', dateBy: 'post', view: '', hideNoThumb: false, ...saved };
 let filtered = [];
 let shown = 0;
 
 export function saveFilters() {
   try { localStorage.setItem('filters3', JSON.stringify(filters)); } catch {}
-  $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new' || filters.dateBy !== 'post'));
+  $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new' || filters.dateBy !== 'post' || filters.hideNoThumb));
 }
 
 // 全角/半角・大文字/小文字・品番のハイフンの有無を気にせず探せるようにする
@@ -46,6 +46,7 @@ function applyFilters() {
     (view !== 'new' || isNew(v)) &&
     (!filters.studio || v.studioKey === filters.studio) &&
     (!siteId || v.siteIds.has(siteId)) &&
+    (!filters.hideNoThumb || v.thumb) &&
     matches(v, words));
   if (view === 'history') filtered.sort((a, b) => viewedAt(b.key) - viewedAt(a.key));
   else if (view === 'fav') filtered.sort((a, b) => favAddedAt(b.key) - favAddedAt(a.key));
