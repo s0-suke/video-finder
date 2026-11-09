@@ -66,7 +66,12 @@ async function boot() {
 
   installTip();
   // 機能のオン/オフを変えたら一覧を描き直す
-  on('features', () => { renderChips(); if (location.hash !== '#settings') render(); });
+  on('features', () => {
+    if (!feature('installTip')) $('#install-tip').classList.add('hidden');
+    if (!feature('backfillBanner')) $('#banner').classList.add('hidden');
+    renderChips();
+    if (location.hash !== '#settings') render();
+  });
   dropStaleFilters();
   saveFilters();
   renderChips();

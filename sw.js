@@ -2,7 +2,7 @@
 // ネット優先で最新版を取り、オフラインのときだけキャッシュを返す。
 // 各動画サイトへの通信（API・画像・プレイヤー）はキャッシュせずそのまま通す。
 // ファイルを増やしたら SHELL にも足すこと（tests/structure.test.js が漏れを検出する）。
-const CACHE = 'vf-v9';
+const CACHE = 'vf-v10';
 const SHELL = [
   './',
   './index.html',
@@ -51,7 +51,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
-  const key = e.request.mode === 'navigate' ? './' : e.request;
+  // 保存キーは ?v=（版番号）を除いた URL に統一する。版ごとにエントリが増えず、オフラインでも最後に取れた版が返る
+  const key = e.request.mode === 'navigate' ? new URL('./', location.href).href : url.origin + url.pathname;
   e.respondWith(
     caches.open(CACHE).then(async (cache) => {
       // HTTP キャッシュの古い版（GitHub Pages は max-age=600）を混ぜないよう、毎回サーバーに更新を確認する
@@ -62,7 +63,7 @@ self.addEventListener('fetch', (e) => {
         if (res.ok) cache.put(key, res.clone());
         return res;
       } catch {
-        return (await cache.match(key, { ignoreSearch: true })) || Response.error();
+        return (await cache.match(key)) || Response.error();
       }
     })
   );

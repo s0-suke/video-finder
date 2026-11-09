@@ -187,35 +187,46 @@ export function backfillProgress() {
 // 一度だけ動く修復: 品番の判定の不具合（年に見える番号の GT-1925 などを品番から外していた版）で
 // 品番とタイトル中の品番を失った投稿を、タイトルとタグを取り直して判定し直す
 const REPAIR_KEY = 'repairYearCodes1';
+let repairing = false;
 export async function repairCodes() {
-  if (crawl.running || !navigator.onLine || (await db.kvGet(REPAIR_KEY, false))) return;
+  if (repairing || crawl.running || DEV || !navigator.onLine || (await db.kvGet(REPAIR_KEY, false))) return;
+  repairing = true;
   const gen = crawl.generation;
   try {
-    for (const site of state.sites) {
-      const ids = [...state.posts.values()].filter((p) => p.siteId === site.id && !p.code).map((p) => p.postId);
-      for (let i = 0; i < ids.length; i += 100) {
-        const { data } = await wpGet(site.url, 'posts', { include: ids.slice(i, i + 100).join(','), per_page: 100, _fields: 'id,title,tags,categories' });
-        await resolveTerms(site, data.flatMap((p) => p.tags || []), 'tags');
-        const fixed = [];
-        for (const raw of data) {
-          const post = state.posts.get(`${site.id}:${raw.id}`);
-          if (!post || post.code) continue;
-          const title = decodeEntities(raw.title && raw.title.rendered);
-          const tags = (raw.tags || []).map((id) => termCache.get(`${site.id}:${id}`)).filter(Boolean);
-          const code = extractCode(title, tags);
-          if (!code) continue;
-          Object.assign(post, { code, title: stripCode(title, code), group: groupKey(code, stripCode(title, code), post.key) });
-          post.tags = post.tags.filter((t) => !isCodeTag(t));
-          fixed.push(post);
+    for (const site of state.sites.filter((s) => s.enabled)) {
+      const siteKey = `${REPAIR_KEY}:${site.id}`;
+      if (await db.kvGet(siteKey, false)) continue;
+      try {
+        const ids = [...state.posts.values()].filter((p) => p.siteId === site.id && !p.code).map((p) => p.postId);
+        for (let i = 0; i < ids.length; i += 100) {
+          const { data } = await wpGet(site.url, 'posts', { include: ids.slice(i, i + 100).join(','), per_page: 100, _fields: 'id,title,tags,categories' });
+          await resolveTerms(site, data.flatMap((p) => p.tags || []), 'tags');
+          const fixed = [];
+          for (const raw of data) {
+            const post = state.posts.get(`${site.id}:${raw.id}`);
+            if (!post || post.code) continue;
+            const title = decodeEntities(raw.title && raw.title.rendered);
+            const tags = (raw.tags || []).map((id) => termCache.get(`${site.id}:${id}`)).filter(Boolean);
+            const code = extractCode(title, tags);
+            if (!code) continue;
+            Object.assign(post, { code, title: stripCode(title, code), group: groupKey(code, stripCode(title, code), post.key) });
+            post.tags = post.tags.filter((t) => !isCodeTag(t));
+            fixed.push(post);
+          }
+          if (gen !== crawl.generation) return;
+          if (fixed.length) { await db.putAll('posts', fixed); scheduleRebuild(); }
+          await sleep(PAGE_DELAY_MS);
         }
-        if (gen !== crawl.generation) return;
-        if (fixed.length) { await db.putAll('posts', fixed); scheduleRebuild(); }
-        await sleep(PAGE_DELAY_MS);
+        await db.kvSet(siteKey, true); // サイトごとに完了を記録（途中で止まっても次回は続きのサイトから）
+      } catch {
+        // このサイトは失敗。ほかのサイトは続ける（このサイトは次回やり直す）
       }
     }
-    await db.kvSet(REPAIR_KEY, true);
-  } catch {
-    // 通信エラーなどは次回やり直す
+    // 有効なサイトがすべて済んだら、修復全体を完了にする
+    const done = await Promise.all(state.sites.filter((s) => s.enabled).map((s) => db.kvGet(`${REPAIR_KEY}:${s.id}`, false)));
+    if (done.every(Boolean)) await db.kvSet(REPAIR_KEY, true);
+  } finally {
+    repairing = false;
   }
 }
 

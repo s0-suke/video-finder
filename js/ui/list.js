@@ -266,7 +266,7 @@ export function initList() {
   const ptr = $('#ptr');
   let pullStart = null, pulled = 0;
   addEventListener('touchstart', (e) => {
-    pullStart = feature('pullRefresh') && window.scrollY <= 0 && !isSheetOpen() && location.hash !== '#settings' ? e.touches[0].clientY : null;
+    pullStart = feature('pullRefresh') && !e.target.closest('#dock, .suggest') && window.scrollY <= 0 && !isSheetOpen() && location.hash !== '#settings' ? e.touches[0].clientY : null;
   }, { passive: true });
   addEventListener('touchmove', (e) => {
     if (pullStart == null) return;
@@ -274,6 +274,7 @@ export function initList() {
     ptr.style.height = Math.min(pulled * 0.5, 60) + 'px';
     ptr.textContent = pulled > 110 ? '離すと新着を確認' : '引っ張って新着を確認';
   }, { passive: true });
+  addEventListener('touchcancel', () => { pullStart = null; pulled = 0; ptr.style.height = '0px'; });
   addEventListener('touchend', () => {
     if (pullStart == null) return;
     if (pulled > 110) {

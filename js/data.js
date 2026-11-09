@@ -82,6 +82,16 @@ function migratePost(p) {
   return true;
 }
 
+// 表示用タイトル（品番を外したもの）。rebuild のたびに正規表現を作らないよう覚えておく
+const titleCache = new Map();
+function displayTitle(title, code) {
+  if (!code) return title;
+  const k = code + '\u0001' + title;
+  let t = titleCache.get(k);
+  if (t === undefined) titleCache.set(k, (t = stripCode(title, code)));
+  return t;
+}
+
 // 検索用の文字列（投稿ごと）。title / tags が変わらない限り作り直さない
 const hayCache = new WeakMap();
 function hayOf(p) {
@@ -121,7 +131,7 @@ export function rebuild() {
     videos.push({
       key,
       code: main.code,
-      title: stripCode(main.title, main.code), // 保存済みのタイトルに品番が残っていても表示では外す
+      title: displayTitle(main.title, main.code), // 保存済みのタイトルに品番が残っていても表示では外す
       thumb: main.thumb,
       date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
       // 発売日の目安（otokoki の掲載日）。照合できなければ空（不明）。掲載日では代用しない

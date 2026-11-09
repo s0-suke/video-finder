@@ -10,8 +10,9 @@ const isYear = (digits) => /^(19|20)\d\d$/.test(digits);
 function codeIn(text) {
   for (const m of text.matchAll(new RegExp(CODE_RE.source, 'gi'))) {
     const code = m[1];
-    // 年に見える数字（1925 など）でも、ハイフン付きの品番（GT-1925）は本物として扱う。年の除外はハイフンなしのタグだけ
     if (NOT_CODE.test(code) || /-OF-/i.test(code)) continue;
+    // 年に見える番号（1925 / 2024）は、接頭辞が 2〜4 文字の大文字のとき（GT-1925）だけ品番として扱う（Summer-2024 などを除く）
+    if (isYear(code.match(/(\d+)$/)[1]) && !/^[A-Z]{2,4}-/.test(code)) continue;
     return code.toUpperCase();
   }
   return null;

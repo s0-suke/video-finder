@@ -74,7 +74,7 @@ export function mountDetails(container, video, { onTag, onStudio } = {}) {
   };
   getOtokoki(video).catch(() => null).then((v) => { oto = v; update(); });
   getSources(video).catch(() => []).then((v) => { src = v; update(); });
-  getPreviews(video).catch(() => []).then((v) => {
+  getPreviews(video, () => container.isConnected).catch(() => []).then((v) => {
     if (!v.length) return;
     pre = v;
     update();
@@ -99,13 +99,13 @@ async function loadOtokoki(video) {
   try { cached = await db.get('details', video.key); } catch {}
   if (cached && cached.version === CACHE_VERSION &&
       Date.now() - cached.fetchedAt < (cached.found ? TTL_FOUND : TTL_MISSING)) {
-    if (cached.otokoki && cached.otokoki.date) noteRelease(video, cached.otokoki.date);
+    if (cached.otokoki && cached.otokoki.date && titleMatched(video, cached.otokoki.title)) noteRelease(video, cached.otokoki.date);
     return cached.otokoki || null;
   }
   const post = await findPost(video);
   const otokoki = post ? await buildOtokoki(post) : null;
   // 見つかった記事の日付を、この動画の発売日の目安として記録する（全件の対応表で照合できなかった動画も埋まる）
-  if (otokoki && otokoki.date) noteRelease(video, otokoki.date);
+  if (otokoki && otokoki.date && titleMatched(video, otokoki.title)) noteRelease(video, otokoki.date);
   const row = { key: video.key, fetchedAt: Date.now(), version: CACHE_VERSION, found: !!otokoki, otokoki };
   try { await db.put('details', row); } catch {}
   return otokoki;
@@ -146,6 +146,15 @@ function videoCode(video) {
 }
 
 // 品番の前後が英数字で続いていない箇所だけを一致とみなす（GT-272 が GT-2720 に一致しないように）
+// 発売日として記録してよいのは、記事のタイトル自体が一致した場合だけ
+// （本文に品番が出てくるだけの続編・シリーズ紹介の記事の日付を付けないため）
+function titleMatched(video, otokokiTitle) {
+  if (!otokokiTitle) return false;
+  const code = videoCode(video);
+  if (code && codeRegExp(code).test(plain(otokokiTitle))) return true;
+  return [video.title, ...video.sources.map((s) => s.title)].some((t) => t && sameTitle(cleanTitle(t, code), cleanTitle(otokokiTitle, code)));
+}
+
 function codeRegExp(code) {
   // 区切り（ハイフン・アンダースコア・空白）の有無は問わない（MR-KR2391 / MRKR2391 / MR-KR-2391）
   const body = [...normalizeCode(code).replace(/[^A-Z0-9]/g, '')].join('[-_ ]?');
@@ -286,8 +295,15 @@ async function getSources(video) {
 const PREVIEW_CHUNK = 12; // 連番の画像を一度に確かめる枚数
 const previewMemo = new Map(); // video.key -> Promise<string[]>
 
-function getPreviews(video) {
-  if (!previewMemo.has(video.key)) previewMemo.set(video.key, loadPreviews(video));
+// alive() が false になったら（詳細を閉じた・別の動画へ移った）残りの確認を打ち切る。空の結果や打ち切りは覚えない
+function getPreviews(video, alive = () => true) {
+  if (!previewMemo.has(video.key)) {
+    const p = loadPreviews(video, alive).then((urls) => {
+      if (!urls.length || !alive()) previewMemo.delete(video.key);
+      return urls;
+    });
+    previewMemo.set(video.key, p);
+  }
   return previewMemo.get(video.key);
 }
 
@@ -319,7 +335,7 @@ function previewSources(rawCode) {
   return list;
 }
 
-async function loadPreviews(video) {
+async function loadPreviews(video, alive) {
   const list = previewSources(videoCode(video));
   if (!list.length) return [];
   // まず各候補の 1 枚目を同時に確かめ、グループごとに最初に見つかった候補を使う
@@ -330,6 +346,7 @@ async function loadPreviews(video) {
     const urls = [s.at(1)];
     // 2 枚目以降は PREVIEW_CHUNK 枚ずつ確かめ、欠けが出たらそこで終わり
     for (let start = 2; start <= s.max; start += PREVIEW_CHUNK) {
+      if (!alive()) break;
       const idx = [];
       for (let i = start; i < start + PREVIEW_CHUNK && i <= s.max; i++) idx.push(i);
       const ok = await Promise.all(idx.map((i) => probeImage(s.at(i))));

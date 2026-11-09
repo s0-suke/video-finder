@@ -110,7 +110,7 @@ export function openDetail(video, opts = {}) {
     const em = e.target.closest('[data-embed]');
     if (em) return play(em.dataset.embed);
     const rel = e.target.closest('[data-related]');
-    if (rel) openDetail(state.byKey.get(rel.dataset.related));
+    if (rel) openDetail(state.byKey.get(rel.dataset.related), nav || {}); // 元の一覧での位置を保ったまま
     const step = e.target.closest('[data-step]');
     if (step) go(+step.dataset.step);
   });

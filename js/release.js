@@ -118,9 +118,10 @@ export async function collectRelease({ force = false } = {}) {
 }
 
 // 詳細を開いて otokoki の記事が見つかったときに、その動画の発売日の目安を記録する
+// （対応表で分かっている動画は上書きしない。品番のある動画はタイトルを記録しない: 同じシリーズ名の別作品に日付が移るため）
 export async function noteRelease(video, date) {
-  if (!date || (video.releaseKnown && video.release === date)) return;
-  const row = { id: 'v:' + video.key, date, code: video.code ? normalizeCode(video.code) : null, tkey: releaseTitleKey(video.title) };
+  if (!date || video.releaseKnown || !(await db.kvGet('releaseEnabled', true))) return;
+  const row = { id: 'v:' + video.key, date, code: video.code ? normalizeCode(video.code) : null, tkey: video.code ? null : releaseTitleKey(video.title) };
   index(row);
   video.release = date;
   video.releaseKnown = true;

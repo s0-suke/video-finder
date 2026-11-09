@@ -6,7 +6,7 @@
 
 import { $, $$ } from '../util.js';
 import { state, on, isNew } from '../data.js';
-import { filters, setView } from './list.js';
+import { filters, setView, saveFilters } from './list.js';
 import { feature } from '../features.js';
 
 const current = () => (location.hash === '#settings' ? 'settings' : filters.view || '');
@@ -25,18 +25,23 @@ export function renderTabs() {
   badge.classList.toggle('on', n > 0);
 }
 
+function switchHash(hash) {
+  history.replaceState(history.state, '', location.pathname + location.search + hash);
+  dispatchEvent(new HashChangeEvent('hashchange'));
+}
+
 export function initTabbar() {
   $('#tabbar').onclick = (e) => {
     const b = e.target.closest('button');
     if (!b) return;
     const tab = b.dataset.tab;
     if (tab === current()) return window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (tab === 'settings') { location.hash = '#settings'; return; }
+    // タブの切り替えは履歴に積まない（戻る操作で設定と一覧を往復しないように）。描画は hashchange の route に任せる
+    if (tab === 'settings') return switchHash('#settings');
     if (location.hash === '#settings') {
-      // 設定から一覧へ: 表示を切り替えてから hash を外す（hashchange で一覧が描かれる）
       filters.view = tab;
-      setView(tab);
-      location.hash = '';
+      saveFilters();
+      switchHash('');
     } else {
       setView(tab);
     }
@@ -52,6 +57,8 @@ export function initTabbar() {
     const lift = () => {
       const hidden = window.innerHeight - vv.height - vv.offsetTop;
       $('#dock').style.transform = hidden > 80 ? `translateY(${-hidden}px)` : '';
+      // 候補は検索欄の上に開くので、見えている範囲（キーボードを除く）からはみ出さない高さにする
+      $('#suggest').style.maxHeight = Math.max(120, vv.height - $('#dock').offsetHeight - 24) + 'px';
     };
     vv.addEventListener('resize', lift);
     vv.addEventListener('scroll', lift);
