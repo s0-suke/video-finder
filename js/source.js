@@ -20,9 +20,18 @@ export function parseContent(html) {
   return { embeds, images: [...new Set(images)], description };
 }
 
+const inflight = new Map(); // post.key -> 取得中の Promise（詳細シートと details.js が同時に呼んでも 1 回で済ませる）
+
 // post に embeds / images / description を付けて返す
-export async function loadContent(post) {
-  if (post.contentVersion === CONTENT_VERSION) return post;
+export function loadContent(post) {
+  if (post.contentVersion === CONTENT_VERSION) return Promise.resolve(post);
+  if (!inflight.has(post.key)) {
+    inflight.set(post.key, fetchContent(post).finally(() => inflight.delete(post.key)));
+  }
+  return inflight.get(post.key);
+}
+
+async function fetchContent(post) {
   const site = state.sites.find((s) => s.id === post.siteId);
   const { data } = await wpGet(site.url, 'posts/' + post.postId, { _fields: 'content' });
   Object.assign(post, parseContent((data.content && data.content.rendered) || ''), { contentVersion: CONTENT_VERSION });

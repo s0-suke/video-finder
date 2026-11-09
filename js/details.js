@@ -244,11 +244,9 @@ function groupOf(id) {
 
 // ───────────── 掲載元の本文 ─────────────
 
-// 詳細シート側（ui/detail.js）も同じ source の loadContent を呼んでいる。
-// 先に始まった取得が終わるのを少し待ち、同じ投稿を 2 回取りに行かないようにする
+// 詳細シート側（ui/detail.js）も同じ source の loadContent を呼ぶが、取得中の Promise を共有するので通信は 1 回で済む
 async function getSources(video) {
   const results = await Promise.allSettled(video.sources.map(async (s) => {
-    for (let i = 0; i < 20 && s.description === undefined; i++) await new Promise((r) => setTimeout(r, 250));
     const p = await loadContent(s);
     return { siteName: s.siteName, link: s.link, description: p.description || '', images: p.images || [] };
   }));

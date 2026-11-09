@@ -2,7 +2,7 @@
 // ネット優先で最新版を取り、オフラインや応答が遅いときだけキャッシュを返す。
 // 各動画サイトへの通信（API・画像・プレイヤー）はキャッシュせずそのまま通す。
 // ファイルを増やしたら SHELL にも足すこと（tests/structure.test.js が漏れを検出する）。
-const CACHE = 'vf-v3';
+const CACHE = 'vf-v4';
 const SHELL = [
   './',
   './index.html',
