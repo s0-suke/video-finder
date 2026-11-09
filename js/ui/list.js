@@ -1,10 +1,11 @@
-// 一覧（検索・チップ・無限スクロール）
+// 一覧（検索・スタジオのチップ・無限スクロール）
 //
-// チップ: すべて / 新着 / ♥ お気に入り / 履歴 / 上位のスタジオ / スタジオ一覧…
+// 表示の切り替え（ホーム / 新着 / お気に入り / 履歴）は画面下のタブバー（ui/tabbar.js）が filters.view を変える
+// 上部のチップ: すべて / 上位のスタジオ / スタジオ一覧…
 
 import { $, esc, fmtDate, toast } from '../util.js';
 import { state, on, isNew } from '../data.js';
-import { crawl } from '../crawler.js';
+import { crawl, collect } from '../crawler.js';
 import { isFav, favAddedAt, toggleFav } from '../favorites.js';
 import { viewedAt } from '../history.js';
 import { normalizeCode } from '../matching.js';
@@ -75,6 +76,7 @@ function cardHTML(v, i) {
       ${isNew(v) ? '<span class="badge new">NEW</span>' : ''}
       ${isFav(v.key) ? '<span class="badge fav" aria-label="お気に入り">♥</span>' : ''}
     </div>
+    ${viewedAt(v.key) ? '<span class="watched">視聴済み</span>' : ''}
     <div class="title">${esc(v.title)}</div>
     <div class="sub">${filters.dateBy === 'release' ? '発売 ' : ''}${esc(fmtDate(dateOf(v)))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
   </button>`;
@@ -96,7 +98,8 @@ export function render(reset = true) {
   const next = filtered.slice(shown, shown + PAGE);
   $('#grid').insertAdjacentHTML('beforeend', next.map((v, k) => cardHTML(v, shown + k)).join(''));
   shown += next.length;
-  $('#meta').textContent = `${filtered.length.toLocaleString()} 件`;
+  const studioName = filters.studio ? state.studios.find((x) => x.key === filters.studio)?.name : '';
+  $('#meta').textContent = [VIEW_LABEL[filters.view], studioName, `${filtered.length.toLocaleString()} 件`].filter(Boolean).join(' · ');
   $('#list-state').textContent = filtered.length
     ? ''
     : (!filters.q && !filters.studio && EMPTY[filters.view]) ? EMPTY[filters.view]
@@ -112,35 +115,11 @@ export function renderChips() {
     const cur = state.studios.find((s) => s.key === filters.studio);
     if (cur) top.unshift(cur);
   }
-  const newCount = state.videos.reduce((n, v) => n + (isNew(v) ? 1 : 0), 0);
   const chip = (on, attrs, label) => `<button class="chip ${on ? 'on' : ''}" ${attrs}>${label}</button>`;
   $('#chips').innerHTML =
-    chip(!filters.studio && !filters.view, 'data-chip="all"', 'すべて') +
-    (newCount ? chip(filters.view === 'new', 'data-chip="view" data-view="new"', `新着 <span class="count">${newCount.toLocaleString()}</span>`) : '') +
-    chip(filters.view === 'fav', 'data-chip="view" data-view="fav"', '♥ お気に入り') +
-    chip(filters.view === 'history', 'data-chip="view" data-view="history"', '履歴') +
+    chip(!filters.studio, 'data-chip="all"', 'すべて') +
     top.map((s) => chip(filters.studio === s.key, `data-chip="studio" data-key="${esc(s.key)}"`, esc(s.name))).join('') +
     (state.studios.length > CHIP_STUDIOS ? '<button class="chip more" data-chip="more">スタジオ一覧…</button>' : '');
-}
-
-// ---- 最近の検索 ----
-
-const RECENT_MAX = 12;
-const loadRecent = () => { try { return JSON.parse(localStorage.getItem('recentQueries') || '[]'); } catch { return []; } };
-function saveRecent(list) { try { localStorage.setItem('recentQueries', JSON.stringify(list.slice(0, RECENT_MAX))); } catch {} }
-function rememberQuery(q) {
-  q = q.trim();
-  if (q.length < 2) return;
-  saveRecent([q, ...loadRecent().filter((x) => x !== q)]);
-}
-
-function renderSuggest() {
-  const box = $('#suggest');
-  const recent = loadRecent();
-  if ($('#q').value || !recent.length) return box.classList.add('hidden');
-  box.innerHTML = `<div class="suggest-head">最近の検索</div>` +
-    recent.map((q) => `<div class="suggest-row"><button class="suggest-q" data-q="${esc(q)}">${esc(q)}</button><button class="suggest-del" data-del="${esc(q)}" aria-label="削除">×</button></div>`).join('');
-  box.classList.remove('hidden');
 }
 
 // 保存してある絞り込みの対象（スタジオ・サイト）がなくなっていたら外す。外したら true
@@ -150,6 +129,15 @@ export function dropStaleFilters() {
   if (filters.studio && !state.studios.some((s) => s.key === filters.studio)) { filters.studio = ''; changed = true; }
   if (filters.site && !state.sites.some((s) => String(s.id) === String(filters.site) && s.enabled)) { filters.site = ''; changed = true; }
   return changed;
+}
+
+const VIEW_LABEL = { '': '', new: '新着', fav: 'お気に入り', history: '履歴' };
+
+export function setView(view) {
+  filters.view = view;
+  saveFilters();
+  renderChips();
+  render();
 }
 
 export function setQuery(q) {
@@ -200,13 +188,12 @@ export function initList() {
     if (!b) return;
     const kind = b.dataset.chip;
     if (kind === 'more') return openFilters();
-    if (kind === 'all') { filters.studio = ''; filters.view = ''; }
-    if (kind === 'view') filters.view = filters.view === b.dataset.view ? '' : b.dataset.view;
+    if (kind === 'all') filters.studio = '';
     if (kind === 'studio') filters.studio = filters.studio === b.dataset.key ? '' : b.dataset.key;
     saveFilters();
     renderChips();
     render();
-    $(`#chips [data-chip="${kind}"]${b.dataset.key ? `[data-key="${CSS.escape(b.dataset.key)}"]` : ''}${b.dataset.view ? `[data-view="${b.dataset.view}"]` : ''}`)
+    $(`#chips [data-chip="${kind}"]${b.dataset.key ? `[data-key="${CSS.escape(b.dataset.key)}"]` : ''}`)
       ?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
   };
 
@@ -234,10 +221,27 @@ export function initList() {
     openDetail(filtered[+c.dataset.i]);
   };
 
-  // 先頭へ戻るボタン
-  const top = $('#to-top');
-  addEventListener('scroll', () => top.classList.toggle('on', window.scrollY > 1500), { passive: true });
-  top.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+  // 一番上で下に引っ張ると新着を取りに行く（ホーム画面アプリには標準の引っ張って更新がないため）
+  const ptr = $('#ptr');
+  let pullStart = null, pulled = 0;
+  addEventListener('touchstart', (e) => {
+    pullStart = window.scrollY <= 0 && !isSheetOpen() && location.hash !== '#settings' ? e.touches[0].clientY : null;
+  }, { passive: true });
+  addEventListener('touchmove', (e) => {
+    if (pullStart == null) return;
+    pulled = Math.max(0, e.touches[0].clientY - pullStart);
+    ptr.style.height = Math.min(pulled * 0.5, 60) + 'px';
+    ptr.textContent = pulled > 110 ? '離すと新着を確認' : '引っ張って新着を確認';
+  }, { passive: true });
+  addEventListener('touchend', () => {
+    if (pullStart == null) return;
+    if (pulled > 110) {
+      if (crawl.running) toast('収集中です');
+      else { toast('新着を確認しています…'); collect(); }
+    }
+    pullStart = null; pulled = 0;
+    ptr.style.height = '0px';
+  });
 
   // 収集でデータが増えたとき：一覧の先頭を見ていれば描き直す
   on('data', () => {
@@ -258,6 +262,15 @@ export function initList() {
   on('favs', refresh('fav'));
   // 再生はシートの中なので、履歴の表示中ならシートを閉じたときに並びを更新する
   let historyDirty = false;
-  on('history', () => { if (filters.view === 'history') historyDirty = true; });
-  on('sheetclose', () => { if (historyDirty && filters.view === 'history') { historyDirty = false; render(); } });
+  on('history', () => { historyDirty = true; });
+  on('sheetclose', () => {
+    if (!historyDirty) return;
+    historyDirty = false;
+    if (filters.view === 'history') return render();
+    // それ以外の表示では、視聴済みの印だけ付け直す
+    for (const card of $('#grid').querySelectorAll('.card')) {
+      const v = filtered[+card.dataset.i];
+      if (v && !card.querySelector('.watched') && viewedAt(v.key)) card.outerHTML = cardHTML(v, +card.dataset.i);
+    }
+  });
 }

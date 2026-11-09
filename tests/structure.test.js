@@ -22,6 +22,28 @@ test('import 先のファイルがすべて存在する', () => {
   }
 });
 
+test('import している名前が、相手のモジュールで export されている', () => {
+  const exportsOf = (file) => {
+    const src = readFileSync(file, 'utf8');
+    const names = new Set();
+    for (const [, n] of src.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z_$][\w$]*)/gm)) names.add(n);
+    for (const [, list] of src.matchAll(/^export\s*\{([^}]*)\}/gm)) for (const n of list.split(',')) names.add(n.trim().split(/\s+as\s+/).pop());
+    return names;
+  };
+  for (const f of walk('js')) {
+    const src = readFileSync(join(root, f), 'utf8');
+    for (const [, list, spec] of src.matchAll(/^\s*import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/gm)) {
+      const target = join(dirname(join(root, f)), spec);
+      if (!existsSync(target)) continue; // 存在しないファイルは別のテストで検出
+      const names = exportsOf(target);
+      for (const raw of list.split(',')) {
+        const name = raw.trim().split(/\s+as\s+/)[0];
+        if (name) assert.ok(names.has(name), `${f} が import している ${name} を ${spec} が export していません`);
+      }
+    }
+  }
+});
+
 test('Service Worker の SHELL にアプリのファイルがすべて入っている', () => {
   const sw = readFileSync(join(root, 'sw.js'), 'utf8');
   for (const f of appFiles) assert.ok(sw.includes(`'./${f}'`), `sw.js の SHELL に ./${f} がありません`);

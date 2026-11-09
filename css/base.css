@@ -181,15 +181,6 @@ header {
 
 .chip .count { font-size: 11px; opacity: .75; margin-left: 2px; }
 
-/* 先頭へ戻る */
-#to-top {
-  position: fixed; right: 16px; bottom: calc(20px + var(--safe-bottom)); z-index: 15;
-  width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--border);
-  background: rgba(35,35,40,.92); color: var(--text); display: grid; place-items: center;
-  opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity .2s, transform .2s;
-}
-#to-top svg { width: 20px; height: 20px; }
-#to-top.on { opacity: 1; pointer-events: auto; transform: none; }
 
 /* 詳細シートの「同じスタジオの動画」 */
 .detail .section-title { text-transform: none; letter-spacing: 0; }
@@ -214,3 +205,51 @@ header {
 .suggest-row { display: flex; align-items: center; }
 .suggest-q { flex: 1; text-align: left; background: none; border: 0; padding: 10px 14px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .suggest-del { background: none; border: 0; color: var(--muted); width: 40px; height: 40px; font-size: 16px; }
+
+/* 起動中の仮表示 */
+.card.skel .thumb { background: linear-gradient(90deg, var(--surface-2) 25%, #2c2c33 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: skel 1.2s infinite linear; }
+.card.skel .title, .card.skel .sub { background: var(--surface-2); border-radius: 4px; color: transparent; margin-top: 6px; }
+.card.skel .sub { width: 60%; }
+@keyframes skel { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* 視聴済み */
+.card .watched { display: inline-block; margin-top: 6px; font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+.card .watched + .title { margin-top: 2px; }
+
+/* 引っ張って更新 */
+.ptr { height: 0; overflow: hidden; display: grid; place-items: center; font-size: 12px; color: var(--muted); transition: height .2s; }
+
+/* ホーム画面への追加の案内 */
+#install-tip { position: relative; padding-right: 36px; }
+#install-tip .close { position: absolute; right: 6px; top: 6px; width: 28px; height: 28px; border: 0; background: none; color: var(--muted); font-size: 16px; }
+
+/* ---- 片手操作用の画面下ドック（検索・絞り込み・タブバー） ---- */
+:root { --dock-h: 116px; }
+body { padding-bottom: calc(var(--dock-h) + var(--safe-bottom) + 12px); }
+header.top { padding: calc(8px + var(--safe-top)) 0 8px; }
+header.top .chips { margin-top: 0; padding: 0 12px; }
+.dock {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 12;
+  background: rgba(20,20,23,.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  border-top: 1px solid var(--border); padding-bottom: var(--safe-bottom);
+  transition: transform .2s;
+}
+.dock-search { padding: 8px 12px 6px; }
+.dock.no-search .dock-search { display: none; }
+.tabbar { display: flex; }
+.tabbar button {
+  flex: 1; background: none; border: 0; padding: 6px 0 4px; color: var(--muted); position: relative;
+  display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 10px;
+}
+.tabbar svg { width: 23px; height: 23px; }
+.tabbar button.on { color: var(--accent); }
+.tabbar button.on svg { fill: rgba(139,124,246,.18); }
+.tab-badge {
+  position: absolute; top: 2px; left: 50%; margin-left: 6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: #ff5a7a; color: #fff; font-size: 10px; font-style: normal; line-height: 16px; text-align: center; display: none;
+}
+.tab-badge.on { display: block; }
+/* 候補は検索欄の上に開く */
+.dock .suggest { top: auto; bottom: 46px; }
+/* トーストはドックの上に出す */
+#toast { bottom: calc(var(--dock-h) + var(--safe-bottom) + 12px); }

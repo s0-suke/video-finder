@@ -2,7 +2,7 @@
 // ネット優先で最新版を取り、オフラインのときだけキャッシュを返す。
 // 各動画サイトへの通信（API・画像・プレイヤー）はキャッシュせずそのまま通す。
 // ファイルを増やしたら SHELL にも足すこと（tests/structure.test.js が漏れを検出する）。
-const CACHE = 'vf-v6';
+const CACHE = 'vf-v7';
 const SHELL = [
   './',
   './index.html',
@@ -32,6 +32,7 @@ const SHELL = [
   './js/ui/detail.js',
   './js/ui/filters.js',
   './js/ui/settings.js',
+  './js/ui/tabbar.js',
 ];
 
 self.addEventListener('install', (e) => {

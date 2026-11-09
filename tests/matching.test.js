@@ -93,3 +93,8 @@ test('外部 URL は http(s) だけ通し、相対パスは掲載元を基準に
   assert.equal(safeUrl('//cdn.b.com/e/1', 'https://a.com/p/'), 'https://cdn.b.com/e/1');
   assert.equal(safeUrl('', 'https://a.com/'), null);
 });
+
+test('年に見える番号のハイフン付き品番（GT-1925 / GT-2024）は品番として扱う', () => {
+  assert.equal(extractCode('GT-1925 – 色白小柄な大学生'), 'GT-1925');
+  assert.equal(extractCode('x', ['GT-2024']), 'GT-2024');
+});

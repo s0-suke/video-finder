@@ -3,7 +3,7 @@
 import { $ } from './util.js';
 import { openDB } from './db.js';
 import { loadAll, on } from './data.js';
-import { crawl, initCrawler, maybeAutoCollect, backfillProgress } from './crawler.js';
+import { crawl, initCrawler, maybeAutoCollect, backfillProgress, repairCodes } from './crawler.js';
 import * as player from './player.js';
 import * as favorites from './favorites.js';
 import * as details from './details.js';
@@ -13,6 +13,7 @@ import { initSheet, hide as hideSheet } from './ui/sheet.js';
 import { initList, render, renderChips, saveFilters, dropStaleFilters } from './ui/list.js';
 import { openFilters } from './ui/filters.js';
 import { initSettings, openSettings } from './ui/settings.js';
+import { initTabbar } from './ui/tabbar.js';
 
 function route() {
   const settings = location.hash === '#settings';
@@ -21,6 +22,22 @@ function route() {
   hideSheet();
   window.scrollTo(0, 0);
   if (settings) openSettings(); else render();
+}
+
+// iPhone の Safari で開いているときだけ、ホーム画面への追加を案内する（閉じたら出さない）
+function installTip() {
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('installTipDismissed') === '1'; } catch {}
+  if (!ios || standalone || dismissed) return;
+  const el = $('#install-tip');
+  el.innerHTML = '<b>ホーム画面に追加すると、アプリとして全画面で使えます</b><br>共有ボタン →「ホーム画面に追加」。収集したデータも消えにくくなります。<button class="close" aria-label="閉じる">×</button>';
+  el.classList.remove('hidden');
+  el.querySelector('.close').onclick = () => {
+    el.classList.add('hidden');
+    try { localStorage.setItem('installTipDismissed', '1'); } catch {}
+  };
 }
 
 async function boot() {
@@ -32,6 +49,7 @@ async function boot() {
   initSheet();
   initList();
   initSettings();
+  initTabbar();
   $('#filter-btn').onclick = openFilters;
   on('progress', () => {
     $('#progress').classList.toggle('on', crawl.running);
@@ -43,6 +61,7 @@ async function boot() {
     }
   });
 
+  installTip();
   dropStaleFilters();
   saveFilters();
   renderChips();
@@ -50,7 +69,7 @@ async function boot() {
   addEventListener('hashchange', route);
 
   // 各サイトの収集が終わってから、発売日の目安（otokoki）の差分を取る
-  const auto = () => maybeAutoCollect().then(() => collectRelease());
+  const auto = () => maybeAutoCollect().then(() => collectRelease()).then(() => repairCodes());
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') auto(); });
   setInterval(auto, 60 * 1000);
   auto();

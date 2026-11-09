@@ -22,41 +22,23 @@
 
 <!-- 一覧 -->
 <div id="view-list">
-  <header>
-    <div class="bar">
-      <div class="search">
-        <input id="q" type="search" placeholder="タイトル・品番・タグで検索" enterkeyhint="search" autocomplete="off">
-        <button class="clear" id="q-clear" aria-label="クリア">×</button>
-        <div class="suggest hidden" id="suggest"></div>
-      </div>
-      <button class="icon-btn" id="filter-btn" aria-label="絞り込み">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
-        <span class="dot"></span>
-      </button>
-      <a class="icon-btn" href="#settings" aria-label="設定" style="color:inherit">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-      </a>
-    </div>
+  <header class="top">
     <div class="chips" id="chips"></div>
     <div class="progress" id="progress"></div>
   </header>
+  <div class="banner hidden" id="install-tip"></div>
   <div class="banner hidden" id="banner"></div>
   <div class="meta-line" id="meta"></div>
-  <div class="grid" id="grid"></div>
+  <div class="ptr" id="ptr">引っ張って新着を確認</div>
+  <div class="grid" id="grid"><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div><div class="card skel"><div class="thumb"></div><div class="title">&nbsp;</div><div class="sub">&nbsp;</div></div></div>
   <div class="state" id="list-state"></div>
   <div id="sentinel" style="height:1px"></div>
-  <button id="to-top" aria-label="先頭へ戻る">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg>
-  </button>
 </div>
 
 <!-- 設定 -->
 <div id="view-settings" class="hidden">
   <header>
     <div class="bar">
-      <a class="icon-btn" href="#" aria-label="戻る" style="color:inherit">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-      </a>
       <div style="font-weight:600;font-size:17px">設定</div>
     </div>
   </header>
@@ -95,6 +77,28 @@
       <p class="note" style="margin-bottom:0">データはこの端末のブラウザの中だけに保存されます。</p>
     </div>
   </div>
+</div>
+
+<!-- 画面下（片手で届く位置）: 検索と絞り込み、タブバー -->
+<div class="dock" id="dock">
+  <div class="bar dock-search" id="dock-search">
+    <div class="search">
+      <input id="q" type="search" placeholder="タイトル・品番・タグで検索" enterkeyhint="search" autocomplete="off">
+      <button class="clear" id="q-clear" aria-label="クリア">×</button>
+      <div class="suggest hidden" id="suggest"></div>
+    </div>
+    <button class="icon-btn" id="filter-btn" aria-label="絞り込み">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      <span class="dot"></span>
+    </button>
+  </div>
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="" aria-label="ホーム"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span>ホーム</span></button>
+    <button data-tab="new" aria-label="新着"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></svg><span>新着</span><i class="tab-badge" id="new-badge"></i></button>
+    <button data-tab="fav" aria-label="お気に入り"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 8 3.4 4.5 7 4.5c2 0 3.5 1.2 5 3 1.5-1.8 3-3 5-3 3.6 0 5.6 3.5 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/></svg><span>お気に入り</span></button>
+    <button data-tab="history" aria-label="履歴"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span>履歴</span></button>
+    <button data-tab="settings" aria-label="設定"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span>設定</span></button>
+  </nav>
 </div>
 
 <div class="backdrop" id="backdrop"></div>
