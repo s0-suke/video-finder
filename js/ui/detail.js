@@ -22,7 +22,7 @@ function relatedHTML(video) {
   if (!video.studioKey) return '';
   const list = [];
   for (const v of state.videos) {
-    if (v.studioKey === video.studioKey && v.key !== video.key) list.push(v);
+    if (v.studioKey === video.studioKey && v.key !== video.key && v.title !== video.title) list.push(v);
     if (list.length >= RELATED) break;
   }
   if (!list.length) return '';

@@ -24,5 +24,6 @@ export function toast(message) {
   el.textContent = message;
   el.classList.add('on');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
+  // 長い文は読み終えられるよう長めに出す
+  toastTimer = setTimeout(() => el.classList.remove('on'), Math.max(2200, message.length * 90));
 }

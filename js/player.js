@@ -18,6 +18,10 @@ import { toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
 const KV_KEY = 'playerAdblock';
+// 広告ブロック（sandbox）を拒んだ提供元。次回からは最初からブロックなしで開く
+const KV_REFUSED = 'playerSandboxRefused';
+let refused = new Set();
+const hostOf = (url) => { try { return new URL(url, location.href).hostname; } catch { return ''; } };
 
 // allow-popups / allow-top-navigation は付けない（広告タブ・画面遷移の防止）
 const SANDBOX = 'allow-scripts allow-same-origin allow-presentation allow-forms';
@@ -27,6 +31,7 @@ let adblock = true; // 設定値（既定オン）
 
 export async function init() {
   adblock = await db.kvGet(KV_KEY, true);
+  refused = new Set(await db.kvGet(KV_REFUSED, []));
   registerSettingsSection({
     id: 'player',
     title: '再生',
@@ -36,7 +41,17 @@ export async function init() {
           <span>広告ブロック</span>
           <button class="toggle ${adblock ? 'on' : ''}" aria-label="広告ブロックのオン/オフ"></button>
         </div>
-        <div class="note">埋め込みプレイヤーが広告タブを開いたり、広告ページへ移動したりするのを防ぎます。再生できない動画は、プレイヤーの下の「広告ブロックなしで再生」から再生できます。</div>`;
+        <div class="note">埋め込みプレイヤーが広告タブを開いたり、広告ページへ移動したりするのを防ぎます。広告ブロックを拒む提供元は自動で見分けて、次回からはブロックなしで開きます（そのときは広告タブが開くことがあるので、閉じて戻ってください）。</div>
+        <div class="note refused-list"></div>`;
+      const list = el.querySelector('.refused-list');
+      const paintRefused = () => {
+        list.innerHTML = refused.size
+          ? `広告ブロック非対応として記録した提供元: ${[...refused].map((h) => `<code>${h}</code>`).join(' ')} <button class="link" data-act="reset">記録を消す</button>`
+          : '';
+        const r = list.querySelector('[data-act="reset"]');
+        if (r) r.onclick = async () => { refused.clear(); await db.kvSet(KV_REFUSED, []); paintRefused(); toast('記録を消しました'); };
+      };
+      paintRefused();
       const btn = el.querySelector('.toggle');
       btn.onclick = async () => {
         adblock = !adblock;
@@ -49,7 +64,7 @@ export async function init() {
 }
 
 export function mountPlayer(container, url) {
-  render(container, url, adblock);
+  render(container, url, adblock && !refused.has(hostOf(url)));
 }
 
 function render(container, url, blocked) {
@@ -75,7 +90,7 @@ function render(container, url, blocked) {
   }
   bar.classList.toggle('open', !blocked);
   bar.innerHTML = `
-    <span class="player-state"><span class="player-dot"></span>${blocked ? '再生中・広告ブロック中' : '再生中・広告ブロックなし'}</span>
+    <span class="player-state"><span class="player-dot"></span>${blocked ? '再生中・広告ブロック中' : refused.has(hostOf(url)) ? '広告ブロック非対応の提供元・広告タブに注意' : '再生中・広告ブロックなし'}</span>
     <button class="btn player-switch">${blocked ? '広告ブロックなしで再生' : '広告ブロックありに戻す'}</button>`;
   const sw = bar.querySelector('.player-switch');
   sw.onclick = () => {
@@ -87,11 +102,14 @@ function render(container, url, blocked) {
   // 「sandboxed」の案内ページへ移るので、その場合は再生できないことを枠の下に出す
   // （iframe の中身は別オリジンで読めないため、読み込み回数で判断する）
   let loads = 0;
-  frame.addEventListener('load', () => {
+  // 拒まれたら提供元を記録し、そのままブロックなしで開き直す
+  frame.addEventListener('load', async () => {
     loads += 1;
     if (!blocked || loads !== 2 || !frame.isConnected) return;
-    bar.classList.add('rejected');
-    bar.querySelector('.player-state').innerHTML = '<span class="player-dot"></span>広告ブロック中は再生できません';
-    sw.classList.add('primary');
+    const host = hostOf(url);
+    refused.add(host);
+    await db.kvSet(KV_REFUSED, [...refused]);
+    toast('この提供元は広告ブロックに対応していないため、ブロックなしで開きました。広告のタブが開いたら閉じて戻ってください');
+    render(container, url, false);
   });
 }

@@ -8,7 +8,7 @@ import * as db from './db.js';
 import { state, emit, rebuild, saveSite, DEFAULT_SITES } from './data.js';
 import { wpGet } from './wp.js';
 import { sleep, decodeEntities } from './util.js';
-import { CODE_RE, extractCode, stripCode, groupKey, pickStudio } from './matching.js';
+import { isCodeTag, extractCode, stripCode, groupKey, pickStudio } from './matching.js';
 
 const PER_PAGE = 100;
 const PAGE_DELAY_MS = 300;
@@ -72,7 +72,7 @@ async function toPosts(site, raw, { backfill }) {
       // 新着表示用。初回の全件取得で入った分は 0（NEW にしない）
       seenAt: prev.key ? prev.seenAt || 0 : backfill ? 0 : Date.now(),
       code, group: groupKey(code, clean, key), studio: pickStudio(tags, cats),
-      tags: [...new Set([...cats, ...tags])].filter((t) => !CODE_RE.test(t)),
+      tags: [...new Set([...cats, ...tags])].filter((t) => !isCodeTag(t)),
     };
   });
 }

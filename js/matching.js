@@ -9,9 +9,15 @@ export function extractCode(title, tags = []) {
   for (const t of tags) {
     const mt = t.match(CODE_RE);
     if (mt && mt[0].length >= t.trim().length - 1) return mt[1].toUpperCase();
+    // タグ全体がハイフンなしの品番（BWB383 など）なら、英字と数字の間にハイフンを補う
+    const bare = t.trim().match(/^([A-Z]{2,6})(\d{3,6})$/i);
+    if (bare) return `${bare[1]}-${bare[2]}`.toUpperCase();
   }
   return null;
 }
+
+// タグが品番そのものか（表示用のタグから除く）
+export const isCodeTag = (t) => CODE_RE.test(t) || /^[A-Z]{2,6}\d{3,6}$/i.test(t.trim());
 
 // 比較用に品番からハイフンを除く（MR-KR2387 と MRKR2387 を同一視）
 export const normalizeCode = (code) => code.replace(/-/g, '').toUpperCase();

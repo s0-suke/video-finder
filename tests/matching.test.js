@@ -51,3 +51,10 @@ test('[PORN] や #NEW のような分類タグはスタジオにしない', () =
   assert.equal(pickStudio(['[PORN]', '#NEW', 'COAT'], []), 'COAT');
   assert.equal(pickStudio(['#W.VID'], ['[LEAK]']), null);
 });
+
+test('タグ全体がハイフンなしの品番なら品番として扱い、ハイフン付きと同じキーにする', () => {
+  assert.equal(extractCode('ナマ狂い種壺待機5', ['BWB383']), 'BWB-383');
+  assert.equal(groupKey(extractCode('x', ['BWB383']), 'x', '1:1'), groupKey('BWB-383', 'y', '2:2'));
+  assert.equal(extractCode('タイトル', ['FC2']), null);
+  assert.equal(extractCode('タイトル', ['vol12']), null);
+});

@@ -6,7 +6,7 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey, isNoiseTag, pickStudio } from './matching.js';
+import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag } from './matching.js';
 
 // 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
 const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
@@ -36,8 +36,24 @@ export const on = (type, fn) => events.addEventListener(type, (e) => fn(e.detail
 
 export async function loadAll() {
   state.sites = await db.getAll('sites');
-  for (const p of await db.getAll('posts')) state.posts.set(p.key, p);
+  const fixed = [];
+  for (const p of await db.getAll('posts')) {
+    if (migratePost(p)) fixed.push(p);
+    state.posts.set(p.key, p);
+  }
+  if (fixed.length) await db.putAll('posts', fixed);
   rebuild();
+}
+
+// 品番の判定を改良したとき用: 品番のない保存済み投稿を判定し直す（変わったら true）
+function migratePost(p) {
+  if (p.code) return false;
+  const code = extractCode(p.title, p.tags || []);
+  if (!code) return false;
+  p.code = code;
+  p.group = groupKey(code, p.title, p.key);
+  p.tags = p.tags.filter((t) => !isCodeTag(t));
+  return true;
 }
 
 export function rebuild() {
