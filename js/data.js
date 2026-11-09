@@ -57,9 +57,11 @@ export function rebuild() {
   for (const [key, rows] of groups) {
     rows.sort((a, b) => (b.thumb ? 1 : 0) - (a.thumb ? 1 : 0) || (a.date < b.date ? 1 : -1));
     const main = rows[0];
-    const tags = [...new Set(rows.flatMap((r) => r.tags))];
+    const rawTags = [...new Set(rows.flatMap((r) => r.tags))];
     const studio = rows.map(studioOf).find(Boolean) || null;
     const sKey = studio ? studioKey(studio) : null;
+    // 表示用のタグからは、分類タグとスタジオ名の言い換え（MEN'S RUSH など）を除く。検索には全部使う
+    const tags = rawTags.filter((t) => !isNoiseTag(t) && !(sKey && studioKey(t).length >= 4 && sKey.startsWith(studioKey(t))));
     if (sKey) {
       let m = studioNames.get(sKey);
       if (!m) studioNames.set(sKey, (m = new Map()));
@@ -78,7 +80,7 @@ export function rebuild() {
       // どこかのサイトで最初に見つかった時刻（初回の全件取得分は 0 = NEW にしない）
       seenAt: rows.reduce((t, r) => Math.min(t, r.seenAt || 0), Infinity),
       sources: rows.map((r) => ({ ...r, siteName: siteName[r.siteId] || '?' })),
-      hay: [...rows.map((r) => r.title), main.code || '', studio || '', ...tags].join('\n').normalize('NFKC').toLowerCase(),
+      hay: [...rows.map((r) => r.title), main.code || '', studio || '', ...rawTags].join('\n').normalize('NFKC').toLowerCase(),
     });
   }
   videos.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));

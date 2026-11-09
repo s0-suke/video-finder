@@ -3,7 +3,7 @@
 import { $ } from './util.js';
 import { openDB } from './db.js';
 import { loadAll, on } from './data.js';
-import { crawl, initCrawler, maybeAutoCollect } from './crawler.js';
+import { crawl, initCrawler, maybeAutoCollect, backfillProgress } from './crawler.js';
 import * as player from './player.js';
 import * as favorites from './favorites.js';
 import * as details from './details.js';
@@ -32,7 +32,15 @@ async function boot() {
   initList();
   initSettings();
   $('#filter-btn').onclick = openFilters;
-  on('progress', () => $('#progress').classList.toggle('on', crawl.running));
+  on('progress', () => {
+    $('#progress').classList.toggle('on', crawl.running);
+    // 初回の全件取得中は一覧の上に進み具合を出す
+    const p = crawl.running ? backfillProgress() : null;
+    $('#banner').classList.toggle('hidden', p == null);
+    if (p != null) {
+      $('#banner').innerHTML = `<b>はじめての取得中… ${Math.floor(p * 100)}%</b><br>アプリを開いたままにしておくと早く終わります。閉じても次に開いたとき続きから再開します。<div class="bar"><span style="width:${(p * 100).toFixed(1)}%"></span></div>`;
+    }
+  });
 
   saveFilters();
   renderChips();

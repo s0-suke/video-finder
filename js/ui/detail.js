@@ -5,7 +5,8 @@
 //   - お気に入り:  favorites.js の favButton(video)
 //   - 詳細情報:    details.js の mountDetails(container, video, { onTag, onStudio })
 
-import { $, esc, fmtDate } from '../util.js';
+import { esc, fmtDate } from '../util.js';
+import { state } from '../data.js';
 import { loadContent } from '../source.js';
 import { mountPlayer } from '../player.js';
 import { favButton } from '../favorites.js';
@@ -13,6 +14,29 @@ import { mountDetails } from '../details.js';
 import { recordView } from '../history.js';
 import { openSheet, closeSheet } from './sheet.js';
 import { setQuery, setStudio } from './list.js';
+
+const RELATED = 12;
+
+// 同じスタジオの動画（新しい順。自分自身は除く）
+function relatedHTML(video) {
+  if (!video.studioKey) return '';
+  const list = [];
+  for (const v of state.videos) {
+    if (v.studioKey === video.studioKey && v.key !== video.key) list.push(v);
+    if (list.length >= RELATED) break;
+  }
+  if (!list.length) return '';
+  return `
+    <div class="section-title">${esc(video.studio)} の動画</div>
+    <div class="related">
+      ${list.map((v) => `
+        <button class="rel" data-related="${esc(v.key)}">
+          <div class="thumb">${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(v.studio || '')}</div>`}</div>
+          <div class="title">${esc(v.title)}</div>
+        </button>`).join('')}
+      <button class="rel more" data-studio="${esc(video.studioKey)}">すべて見る →</button>
+    </div>`;
+}
 
 export function openDetail(video) {
   const el = document.createElement('div');
@@ -31,6 +55,7 @@ export function openDetail(video) {
     </div>
     <div data-role="details"></div>
     ${video.tags.length ? `<div class="tags">${video.tags.map((t) => `<button class="tag" data-q="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
+    ${relatedHTML(video)}
     <div class="section-title">掲載サイト（${video.sources.length}）</div>
     ${video.sources.map((s) => `
       <div class="source">
@@ -60,7 +85,9 @@ export function openDetail(video) {
     const st = e.target.closest('[data-studio]');
     if (st) { closeSheet(); return setStudio(st.dataset.studio); }
     const em = e.target.closest('[data-embed]');
-    if (em) play(em.dataset.embed);
+    if (em) return play(em.dataset.embed);
+    const rel = e.target.closest('[data-related]');
+    if (rel) openDetail(state.byKey.get(rel.dataset.related));
   });
 
   openSheet(el);

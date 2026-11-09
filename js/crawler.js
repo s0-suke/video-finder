@@ -87,6 +87,7 @@ async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinit
   let page = start, total = start;
   while (page <= Math.min(total, maxPage)) {
     site.status = `収集中 ${page}/${total} ページ`;
+    site.progress = { page, total };
     emit('progress');
     const { data, totalPages } = await wpGet(site.url, 'posts', {
       per_page: PER_PAGE, page, _fields: 'id,date,link,title,featured_media,tags,categories',
@@ -126,6 +127,7 @@ async function crawlSite(site, { full = false } = {}) {
       await crawlPages(site, site.backfillPage || 1, { stopWhenKnown: false, track });
     }
     site.backfillDone = true;
+    site.progress = null;
     site.status = 'OK';
     site.error = false;
   } catch (e) {
@@ -156,6 +158,18 @@ export async function collect({ siteId, full = false } = {}) {
 }
 
 // アプリを開いたとき・画面に戻ったときに、前回から一定時間経っていれば新着を取りに行く
+// 初回の全件取得の進み具合（0〜1）。全件取得中のサイトがなければ null
+export function backfillProgress() {
+  const pending = state.sites.filter((s) => s.enabled && !s.backfillDone && !s.error);
+  if (!pending.length) return null;
+  let done = 0, total = 0;
+  for (const s of pending) {
+    const p = s.progress || { page: s.backfillPage || 0, total: 0 };
+    done += p.page; total += Math.max(p.total, p.page, 1);
+  }
+  return done / total;
+}
+
 export async function maybeAutoCollect() {
   const min = await db.kvGet('intervalMin', 30);
   if (!min || crawl.running || !navigator.onLine) return;
