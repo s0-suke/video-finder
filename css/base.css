@@ -208,3 +208,13 @@ header {
 .banner b { color: var(--text); }
 .banner .bar { height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: 8px; overflow: hidden; }
 .banner .bar span { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+
+/* 最近の検索 */
+.suggest {
+  position: absolute; left: 0; right: 0; top: 46px; z-index: 30; max-height: 50vh; overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5); padding: 4px 0;
+}
+.suggest-head { font-size: 11px; color: var(--muted); padding: 6px 14px 4px; }
+.suggest-row { display: flex; align-items: center; }
+.suggest-q { flex: 1; text-align: left; background: none; border: 0; padding: 10px 14px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.suggest-del { background: none; border: 0; color: var(--muted); width: 40px; height: 40px; font-size: 16px; }

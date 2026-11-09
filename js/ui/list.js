@@ -118,6 +118,26 @@ export function renderChips() {
     (state.studios.length > CHIP_STUDIOS ? '<button class="chip more" data-chip="more">スタジオ一覧…</button>' : '');
 }
 
+// ---- 最近の検索 ----
+
+const RECENT_MAX = 12;
+const loadRecent = () => { try { return JSON.parse(localStorage.getItem('recentQueries') || '[]'); } catch { return []; } };
+function saveRecent(list) { try { localStorage.setItem('recentQueries', JSON.stringify(list.slice(0, RECENT_MAX))); } catch {} }
+function rememberQuery(q) {
+  q = q.trim();
+  if (q.length < 2) return;
+  saveRecent([q, ...loadRecent().filter((x) => x !== q)]);
+}
+
+function renderSuggest() {
+  const box = $('#suggest');
+  const recent = loadRecent();
+  if ($('#q').value || !recent.length) return box.classList.add('hidden');
+  box.innerHTML = `<div class="suggest-head">最近の検索</div>` +
+    recent.map((q) => `<div class="suggest-row"><button class="suggest-q" data-q="${esc(q)}">${esc(q)}</button><button class="suggest-del" data-del="${esc(q)}" aria-label="削除">×</button></div>`).join('');
+  box.classList.remove('hidden');
+}
+
 export function setQuery(q) {
   $('#q').value = q;
   filters.q = q;
@@ -145,8 +165,20 @@ export function initList() {
     clearTimeout(qTimer);
     qTimer = setTimeout(() => { filters.q = $('#q').value.trim(); saveFilters(); render(); }, 250);
   });
-  $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#q').blur(); });
-  $('#q-clear').onclick = () => { $('#q').value = ''; $('#q').dispatchEvent(new Event('input')); };
+  $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { rememberQuery($('#q').value); $('#q').blur(); } });
+  $('#q-clear').onclick = () => { $('#q').value = ''; $('#q').dispatchEvent(new Event('input')); $('#q').focus(); };
+
+  // 検索欄が空のときは最近の検索を出す。候補のタップで blur より先に処理されるよう pointerdown で受ける
+  $('#q').addEventListener('focus', renderSuggest);
+  $('#q').addEventListener('input', renderSuggest);
+  $('#q').addEventListener('blur', () => { rememberQuery($('#q').value); setTimeout(() => $('#suggest').classList.add('hidden'), 150); });
+  $('#suggest').addEventListener('pointerdown', (e) => {
+    e.preventDefault(); // 検索欄のフォーカスを外さない
+    const d = e.target.closest('[data-del]');
+    if (d) { saveRecent(loadRecent().filter((x) => x !== d.dataset.del)); return renderSuggest(); }
+    const q = e.target.closest('[data-q]');
+    if (q) { setQuery(q.dataset.q); rememberQuery(q.dataset.q); $('#suggest').classList.add('hidden'); $('#q').blur(); }
+  });
 
   // 表示の切り替え（新着・お気に入り・履歴）とスタジオは組み合わせられる
   $('#chips').onclick = (e) => {
