@@ -505,7 +505,7 @@ function render(container, video, info, { onTag, onStudio }) {
         const k = studioKey(name);
         if (state.studios.some((s) => s.key === k)) return onStudio(k);
       }
-      if (onTag) onTag(searchQuery(name));
+      if (onTag) onTag(group === '出演者' ? searchQuery(name) : tagQuery(name));
     }
   };
 }
@@ -587,6 +587,23 @@ function updateIndicator(container) {
   container.querySelectorAll('.dt-dot').forEach((d, k) => d.classList.toggle('on', k === i));
 }
 
+// 一覧の検索（ui/list.js）と同じ判定で、その語に当たる動画の数を数える
+// （全角/半角・大小文字を無視し、空白で区切った語をすべて含むもの）
+function hitCount(q) {
+  const words = q.normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return 0;
+  let n = 0;
+  for (const v of state.videos) if (words.every((w) => v.hay.includes(w))) n++;
+  return n;
+}
+
+// 出演者以外（体型・プレイ・シチュエーションなど）は、タグの文字列そのもので探す
+// 例: 「ガッチリ・マッチョ」は「マッチョ」に縮めない。そのままでは 1 件も当たらないときだけ短い語にする
+function tagQuery(name) {
+  const q = name.trim();
+  return hitCount(q) > 0 ? q : searchQuery(name);
+}
+
 // チップの名前から、一覧の検索でいちばん多く引っかかる言葉を選ぶ
 // 例: 「コウダイ＝スリ筋ノンケ大学生」→「コウダイ」、「デカマラ潮吹き王子/GET-film」→「デカマラ潮吹き王子」
 function searchQuery(name) {
@@ -601,26 +618,29 @@ function searchQuery(name) {
   let best = candidates[0];
   let bestCount = 0;
   for (const c of candidates) {
-    const w = c.toLowerCase();
-    let n = 0;
-    for (const v of state.videos) if (v.hay.includes(w)) n++;
+    const n = hitCount(c);
     if (n > bestCount) { best = c; bestCount = n; }
   }
   return best;
 }
 
-// 画像を全画面で表示する（横スワイプで前後へ。タップか ✕ で閉じる）
+// 画像を全画面で表示する
+//   横スワイプ、または画面の左右の端（各 25%）のタップで前後へ。
+//   下スワイプ・下部中央の ✕・画像の外のタップ・ブラウザの戻る操作で閉じる（片手で届く位置だけで操作できるように）。
 // 閉じたら onClose(最後に見ていた番号) を呼ぶ（カルーセルの位置を合わせる）
+const EDGE = 0.25; // 左右の端としてタップを前後送りに使う幅（画面幅に対する割合）
+const SWIPE_CLOSE = 90; // この距離（px）以上下へスワイプしたら閉じる
+
 function openLightbox(urls, start, onClose) {
   const box = document.createElement('div');
   box.className = 'dt-lightbox';
   box.innerHTML = `
     <div class="dt-lb-track">${urls.map((u) => `<div class="dt-lb-item"><img src="${esc(u)}" referrerpolicy="no-referrer" alt=""></div>`).join('')}</div>
-    <button class="dt-lb-close" aria-label="閉じる">✕</button>
     ${urls.length > 1 ? `
       <button class="dt-lb-nav prev" data-dir="-1" aria-label="前の画像">‹</button>
       <button class="dt-lb-nav next" data-dir="1" aria-label="次の画像">›</button>
-      <div class="dt-lb-count"><span data-role="n">${start + 1}</span> / ${urls.length}</div>` : ''}`;
+      <div class="dt-lb-count"><span data-role="n">${start + 1}</span> / ${urls.length}</div>` : ''}
+    <button class="dt-lb-close" aria-label="閉じる">✕</button>`;
   document.body.appendChild(box);
   const track = box.querySelector('.dt-lb-track');
   track.scrollLeft = start * track.clientWidth;
@@ -629,8 +649,15 @@ function openLightbox(urls, start, onClose) {
   track.addEventListener('scroll', () => {
     if (counter) counter.textContent = index() + 1;
   }, { passive: true });
+  const go = (dir) => {
+    const to = Math.min(urls.length - 1, Math.max(0, index() + dir));
+    track.scrollTo({ left: to * track.clientWidth, behavior: 'smooth' });
+  };
 
+  let closed = false;
   const close = () => {
+    if (closed) return;
+    closed = true;
     removeEventListener('popstate', close);
     box.classList.remove('open');
     if (onClose) onClose(index());
@@ -638,14 +665,60 @@ function openLightbox(urls, start, onClose) {
   };
   // 戻る操作でシートごと閉じたときも一緒に消す
   addEventListener('popstate', close);
-  box.addEventListener('click', (e) => {
-    const nav = e.target.closest('.dt-lb-nav');
-    if (nav) {
-      const to = Math.min(urls.length - 1, Math.max(0, index() + Number(nav.dataset.dir)));
-      track.scrollTo({ left: to * track.clientWidth, behavior: 'smooth' });
-      return;
+
+  // 下スワイプで閉じる（指に合わせて画像を下げ、背景を薄くする。足りなければ元に戻す）
+  // 横の動きは track のスクロール（touch-action: pan-x）に任せ、縦の動きだけここで扱う
+  let drag = null; // { id, x, y, dy, vertical }
+  let suppressClick = false;
+  const setDrag = (dy) => {
+    track.style.transform = dy ? `translateY(${dy}px)` : '';
+    box.style.setProperty('--dt-lb-fade', String(Math.max(0, 1 - dy / 400)));
+  };
+  box.addEventListener('pointerdown', (e) => {
+    if (closed || e.button > 0 || e.target.closest('button')) return;
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dy: 0, vertical: null };
+  });
+  box.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (drag.vertical === null && Math.hypot(dx, dy) > 8) drag.vertical = Math.abs(dy) > Math.abs(dx);
+    if (!drag.vertical) return;
+    drag.dy = Math.max(0, dy);
+    box.classList.add('dragging');
+    setDrag(drag.dy);
+  });
+  const endDrag = (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const { vertical, dy } = drag;
+    drag = null;
+    box.classList.remove('dragging');
+    if (!vertical) return;
+    suppressClick = true; // ドラッグの後に来る click で閉じたり送ったりしない
+    setTimeout(() => { suppressClick = false; }, 300);
+    if (e.type === 'pointerup' && dy >= SWIPE_CLOSE) {
+      box.classList.add('dismiss');
+      setDrag(dy);
+      close();
+    } else {
+      setDrag(0);
     }
-    if (e.target.closest('.dt-lb-close') || !e.target.closest('img')) close();
+  };
+  box.addEventListener('pointerup', endDrag);
+  box.addEventListener('pointercancel', endDrag);
+
+  box.addEventListener('click', (e) => {
+    if (suppressClick) return;
+    if (e.target.closest('.dt-lb-close')) return close();
+    const nav = e.target.closest('.dt-lb-nav');
+    if (nav) return go(Number(nav.dataset.dir));
+    // 左右の端のタップは前後送り（画像の上でも）
+    if (urls.length > 1) {
+      const w = box.clientWidth;
+      if (e.clientX < w * EDGE) return go(-1);
+      if (e.clientX > w * (1 - EDGE)) return go(1);
+    }
+    if (!e.target.closest('img')) close();
   });
   requestAnimationFrame(() => box.classList.add('open'));
 }
