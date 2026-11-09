@@ -1,1 +1,22 @@
 /* player.js 用のスタイル */
+
+/* 再生中の枠：広告ブロック中はアクセント色、ブロックなしは警告色の縁取り */
+.sheet .hero.player-on { box-shadow: 0 0 0 2px var(--accent); }
+.sheet .hero.player-on.player-open { box-shadow: 0 0 0 2px var(--danger); }
+
+/* 枠の下の状態表示と切り替えボタン */
+.player-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-top: 8px; font-size: 12px; color: var(--muted);
+}
+.player-state { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.player-dot {
+  width: 8px; height: 8px; border-radius: 4px; background: var(--accent); flex: none;
+  animation: player-pulse 1.6s ease-in-out infinite;
+}
+.player-bar.open .player-dot { background: var(--danger); }
+.player-bar.rejected { color: var(--text); }
+.player-bar.rejected .player-dot { background: var(--danger); animation: none; }
+.player-bar .btn { height: 32px; padding: 0 12px; font-size: 12px; flex: none; }
+@keyframes player-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .player-dot { animation: none; } }
