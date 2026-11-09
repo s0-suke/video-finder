@@ -175,7 +175,7 @@ export async function maybeAutoCollect() {
   if (!min || crawl.running || !navigator.onLine) return;
   const last = await db.kvGet('lastCollect', 0);
   const unfinished = !DEV && state.sites.some((s) => s.enabled && !s.backfillDone && !s.error);
-  if (unfinished || Date.now() - last >= min * 60 * 1000) collect();
+  if (unfinished || Date.now() - last >= min * 60 * 1000) await collect();
 }
 
 export async function addSite(input, { verify = true } = {}) {

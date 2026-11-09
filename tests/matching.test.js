@@ -58,3 +58,18 @@ test('タグ全体がハイフンなしの品番なら品番として扱い、�
   assert.equal(extractCode('タイトル', ['FC2']), null);
   assert.equal(extractCode('タイトル', ['vol12']), null);
 });
+
+import { releaseCode, releaseTitleKey } from '../js/matching.js';
+
+test('otokoki のタイトルから品番を取り出す（販売サイトの GV- 接頭辞は除く）', () => {
+  assert.equal(releaseCode('GV-KNZ3005 ノンケ'), 'KNZ3005');
+  assert.equal(releaseCode('【GET-film】GT-2720 逆ハーレム'), 'GT2720');
+  assert.equal(releaseCode('GV-OAV-463 タイトル'), 'OAV463');
+  assert.equal(releaseCode('品番なしのタイトル'), null);
+});
+
+test('otokoki の先頭の括弧書きを外したタイトルキーが、掲載サイトのタイトルと一致する', () => {
+  assert.equal(releaseTitleKey('【BRAVO-JAPAN：Full HD】ノンケハルヤ アナル調教です'), releaseTitleKey('ノンケハルヤ アナル調教です'));
+  assert.equal(releaseTitleKey('【インディーズ：Full HD】〈裏野ゲイ〉ノンケマッチョを生ハメ!'), releaseTitleKey('ノンケマッチョを生ハメ！'));
+  assert.equal(releaseTitleKey('短い'), null);
+});

@@ -8,9 +8,10 @@
 //   favs     お気に入り             keyPath: key（統合キー = video.key）
 //   history  視聴履歴               keyPath: key（統合キー）
 //   details  外部サイトの詳細情報のキャッシュ  keyPath: key（統合キー）
+//   release  発売日の目安用の otokoki 記事（id・日付・品番・タイトルキー）  keyPath: id
 
 const DB_NAME = 'video-finder';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let db;
 
@@ -29,6 +30,9 @@ export function openDB() {
         d.createObjectStore('favs', { keyPath: 'key' });
         d.createObjectStore('history', { keyPath: 'key' });
         d.createObjectStore('details', { keyPath: 'key' });
+      }
+      if (e.oldVersion < 3) {
+        d.createObjectStore('release', { keyPath: 'id' });
       }
     };
     r.onsuccess = () => { db = r.result; resolve(db); };

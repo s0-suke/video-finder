@@ -8,6 +8,7 @@ import * as player from './player.js';
 import * as favorites from './favorites.js';
 import * as details from './details.js';
 import * as history from './history.js';
+import { initRelease, collectRelease } from './release.js';
 import { initSheet, hide as hideSheet } from './ui/sheet.js';
 import { initList, render, renderChips, saveFilters } from './ui/list.js';
 import { openFilters } from './ui/filters.js';
@@ -26,7 +27,7 @@ async function boot() {
   await openDB();
   await loadAll();
   await initCrawler();
-  await Promise.all([favorites.init(), history.init(), player.init(), details.init()]);
+  await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease()]);
 
   initSheet();
   initList();
@@ -47,9 +48,11 @@ async function boot() {
   route();
   addEventListener('hashchange', route);
 
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') maybeAutoCollect(); });
-  setInterval(maybeAutoCollect, 60 * 1000);
-  maybeAutoCollect();
+  // 各サイトの収集が終わってから、発売日の目安（otokoki）の差分を取る
+  const auto = () => maybeAutoCollect().then(() => collectRelease());
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') auto(); });
+  setInterval(auto, 60 * 1000);
+  auto();
 }
 
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});

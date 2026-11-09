@@ -6,7 +6,7 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode } from './matching.js';
+import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode, releaseTitleKey } from './matching.js';
 
 // 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
 const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
@@ -24,7 +24,22 @@ export const state = {
   videos: [], // 統合後（新しい順）
   byKey: new Map(), // video.key -> video
   studios: [], // { key, name, count }（本数の多い順）
+  release: { byCode: new Map(), byTitle: new Map() }, // 発売日の目安（release.js が埋める）
 };
+
+// 発売日の目安: otokoki の掲載日（品番 → タイトルの順に照合）。なければ null
+function releaseOf(code, rows) {
+  if (code) {
+    const d = state.release.byCode.get(normalizeCode(code));
+    if (d) return d;
+  }
+  for (const r of rows) {
+    const k = releaseTitleKey(r.title);
+    const d = k && state.release.byTitle.get(k);
+    if (d) return d;
+  }
+  return null;
+}
 
 // 収集で新しく見つかってから NEW 表示にしておく期間
 const NEW_MS = 3 * 24 * 60 * 60 * 1000;
@@ -89,6 +104,11 @@ export function rebuild() {
       title: main.title,
       thumb: main.thumb,
       date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
+      // 発売日の目安。otokoki になければ、いちばん早い掲載日で代用する（releaseKnown = false）
+      ...(() => {
+        const known = releaseOf(main.code, rows);
+        return { release: known || rows.reduce((d, r) => (!d || r.date < d ? r.date : d), ''), releaseKnown: !!known };
+      })(),
       studio,
       studioKey: sKey,
       tags,

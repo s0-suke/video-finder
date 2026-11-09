@@ -49,3 +49,20 @@ export function pickStudio(tags, cats) {
 
 // 表記ゆれのあるスタジオ名（MEN'S RUSH.TV / Men's Rush.TV / Men’s Rush.TV）を同じものとして扱うためのキー
 export const studioKey = (name) => normalizeTitle(name || '');
+
+// ---- 発売日の目安（otokoki の記事タイトルとの照合）----
+
+// otokoki のタイトルに入っている品番（GV-KNZ3005 の「GV-」のような販売サイト側の接頭辞は除く）を比較用の形で返す
+export function releaseCode(title) {
+  const t = title.replace(/(?<![A-Z0-9])GV-/gi, '');
+  const m = t.match(/(?<![A-Z0-9])([A-Z]{2,8}-(?:[A-Z]{1,4}-?)?\d{2,6})(?![0-9])/i) || t.match(/(?<![A-Z0-9])([A-Z]{2,6}\d{3,6})(?![A-Z0-9])/i);
+  return m ? normalizeCode(m[1]) : null;
+}
+
+// 先頭の【レーベル：Full HD】[シリーズ]〈出演〉のような括弧書きを外して正規化したタイトル（短すぎるものは照合に使わない）
+export function releaseTitleKey(title) {
+  let t = title;
+  for (let i = 0; i < 4; i++) t = t.replace(/^\s*(?:【[^】]*】|\[[^\]]*\]|〈[^〉]*〉|＜[^＞]*＞|<[^>]*>)\s*/, '');
+  const key = normalizeTitle(t);
+  return key.length >= 10 ? key : null;
+}

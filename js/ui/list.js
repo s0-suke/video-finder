@@ -17,13 +17,15 @@ const CHIP_STUDIOS = 15;
 
 // view: '' = すべて / 'new' = 新着 / 'fav' = お気に入り / 'history' = 履歴
 const saved = (() => { try { return JSON.parse(localStorage.getItem('filters3') || '{}'); } catch { return {}; } })();
-export const filters = { q: '', studio: '', site: '', sort: 'new', view: '', ...saved };
+// dateBy: 'post' = 各サイトの掲載日 / 'release' = 元動画の発売日（目安。release.js）
+export const filters = { q: '', studio: '', site: '', sort: 'new', dateBy: 'post', view: '', ...saved };
+const dateOf = (v) => (filters.dateBy === 'release' ? v.release : v.date);
 let filtered = [];
 let shown = 0;
 
 export function saveFilters() {
   try { localStorage.setItem('filters3', JSON.stringify(filters)); } catch {}
-  $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new'));
+  $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new' || filters.dateBy !== 'post'));
 }
 
 // 全角/半角・大文字/小文字・品番のハイフンの有無を気にせず探せるようにする
@@ -46,10 +48,13 @@ function applyFilters() {
     matches(v, words));
   if (view === 'history') filtered.sort((a, b) => viewedAt(b.key) - viewedAt(a.key));
   else if (view === 'fav') filtered.sort((a, b) => favAddedAt(b.key) - favAddedAt(a.key));
-  else if (filters.sort === 'old') filtered.reverse();
   else if (filters.sort === 'random') {
     const r = new Map(filtered.map((v) => [v.key, hash(v.key + shuffleSeed)]));
     filtered.sort((a, b) => r.get(a.key) - r.get(b.key));
+  } else {
+    // state.videos は掲載日の新しい順。発売日で並べるときだけ並べ直す
+    if (filters.dateBy === 'release') filtered.sort((a, b) => (a.release < b.release ? 1 : a.release > b.release ? -1 : 0));
+    if (filters.sort === 'old') filtered.reverse();
   }
 }
 
@@ -71,7 +76,7 @@ function cardHTML(v, i) {
       ${isFav(v.key) ? '<span class="badge fav" aria-label="お気に入り">♥</span>' : ''}
     </div>
     <div class="title">${esc(v.title)}</div>
-    <div class="sub">${esc(fmtDate(v.date))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
+    <div class="sub">${filters.dateBy === 'release' ? '発売 ' : ''}${esc(fmtDate(dateOf(v)))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
   </button>`;
 }
 

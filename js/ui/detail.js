@@ -51,7 +51,8 @@ export function openDetail(video) {
     <div class="kv">
       ${video.code ? `<span>${esc(video.code)}</span>` : ''}
       ${video.studio ? `<button class="link" data-studio="${esc(video.studioKey)}">${esc(video.studio)}</button>` : ''}
-      <span>${esc(fmtDate(video.date))}</span>
+      <span>掲載 ${esc(fmtDate(video.date))}</span>
+      <span title="${video.releaseKnown ? 'otokoki の掲載日' : '最も早い掲載日'}">発売 ${esc(fmtDate(video.release))}${video.releaseKnown ? '' : '?'}</span>
     </div>
     <div data-role="details"></div>
     ${video.tags.length ? `<div class="tags">${video.tags.map((t) => `<button class="tag" data-q="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
