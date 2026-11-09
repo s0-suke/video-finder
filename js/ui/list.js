@@ -5,7 +5,7 @@
 import { $, esc, fmtDate } from '../util.js';
 import { state, on, isNew } from '../data.js';
 import { crawl } from '../crawler.js';
-import { isFav } from '../favorites.js';
+import { isFav, favAddedAt } from '../favorites.js';
 import { viewedAt } from '../history.js';
 import { normalizeCode } from '../matching.js';
 import { isSheetOpen } from './sheet.js';
@@ -45,13 +45,14 @@ function applyFilters() {
     (!siteId || v.siteIds.has(siteId)) &&
     matches(v, words));
   if (view === 'history') filtered.sort((a, b) => viewedAt(b.key) - viewedAt(a.key));
+  else if (view === 'fav') filtered.sort((a, b) => favAddedAt(b.key) - favAddedAt(a.key));
   else if (filters.sort === 'old') filtered.reverse();
 }
 
 function cardHTML(v, i) {
   return `<button class="card" data-i="${i}">
     <div class="thumb">
-      ${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : ''}
+      ${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(v.studio || v.title.slice(0, 12))}</div>`}
       ${v.code ? `<span class="badge code">${esc(v.code)}</span>` : ''}
       ${isNew(v) ? '<span class="badge new">NEW</span>' : ''}
       ${isFav(v.key) ? '<span class="badge fav" aria-label="お気に入り">♥</span>' : ''}

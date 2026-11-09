@@ -69,6 +69,12 @@ header {
   position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: var(--surface-2);
 }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* サムネイルがない動画（igay69 など）の代わりの表示 */
+.thumb .ph {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 8px; text-align: center;
+  background: linear-gradient(135deg, #2a2540, #1c1c22); color: var(--muted); font-size: 12px; font-weight: 600;
+  overflow: hidden; word-break: break-all;
+}
 .badge {
   position: absolute; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px;
   background: rgba(0,0,0,.72); color: #fff;
