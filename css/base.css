@@ -49,7 +49,7 @@ header {
 .chips { display: flex; gap: 6px; overflow-x: auto; margin-top: 10px; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
 .chip {
-  flex: none; height: 30px; padding: 0 12px; border-radius: 15px; border: 1px solid var(--border);
+  flex: none; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--border);
   background: var(--surface); font-size: 13px; color: var(--muted); white-space: nowrap;
 }
 .chip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
@@ -79,7 +79,7 @@ header {
 }
 .badge {
   position: absolute; font-size: 11px; font-weight: 600; padding: 2px 6px; border-radius: 6px;
-  background: rgba(0,0,0,.72); color: #fff;
+  background: rgba(0,0,0,.86); color: #fff;
 }
 .badge.code { left: 6px; bottom: 6px; }
 .badge.new { left: 6px; top: 6px; background: var(--accent); letter-spacing: .04em; }
@@ -281,3 +281,12 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 .detail-bar .play-main:disabled { background: var(--surface-2); border-color: var(--border); color: var(--muted); opacity: 1; }
 .detail-bar .nav-btn { width: 48px; padding: 0; justify-content: center; font-size: 26px; line-height: 1; }
 .detail-bar .nav-btn:disabled { opacity: .3; }
+
+/* 件数の横の条件チップ */
+.meta-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cond { height: 28px; padding: 0 10px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 12px; }
+.cond b { color: var(--muted); font-weight: 400; margin-left: 2px; }
+
+/* 検索欄: 標準の消去ボタンは消し、独自の × を押しやすくする */
+.search input::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+.search .clear { right: 2px; top: 0; width: 40px; height: 40px; }

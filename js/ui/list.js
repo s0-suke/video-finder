@@ -4,6 +4,10 @@
 // 上部のチップ: すべて / 上位のスタジオ / スタジオ一覧…
 
 import { $, esc, fmtDate, toast } from '../util.js';
+
+// カード用の短い日付（今年なら「11/04」、それ以外は「2021/05/23」）
+const thisYear = String(new Date().getFullYear());
+const shortDate = (d) => (d && d.startsWith(thisYear) ? d.slice(5, 10).replace('-', '/') : fmtDate(d));
 import { state, on, isNew } from '../data.js';
 import { crawl, collect } from '../crawler.js';
 import { isFav, favAddedAt, toggleFav } from '../favorites.js';
@@ -84,14 +88,14 @@ function cardHTML(v, i) {
     </div>
     ${feature('history') && viewedAt(v.key) ? '<span class="watched">視聴済み</span>' : ''}
     <div class="title">${esc(v.title)}</div>
-    <div class="sub">${filters.dateBy === 'release' ? (v.release ? '発売 ' + esc(fmtDate(v.release)) : '発売日不明') : esc(fmtDate(v.date))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
+    <div class="sub">${filters.dateBy === 'release' ? (v.release ? '発売 ' + esc(shortDate(v.release)) : '発売日不明') : esc(shortDate(v.date))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
   </button>`;
 }
 
 const EMPTY = {
   fav: 'お気に入りはまだありません。動画の詳細で ♡ を押すと追加されます',
   history: '再生した動画がここに並びます',
-  new: 'ここ数日で新しく見つかった動画はありません',
+  new: '前回までの取得のあとに新しく見つかった動画が、3 日間ここに並びます（はじめての全件取得の分は含みません）',
 };
 
 export function render(reset = true) {
@@ -104,10 +108,10 @@ export function render(reset = true) {
   const next = filtered.slice(shown, shown + PAGE);
   $('#grid').insertAdjacentHTML('beforeend', next.map((v, k) => cardHTML(v, shown + k)).join(''));
   shown += next.length;
-  const studioName = filters.studio ? state.studios.find((x) => x.key === filters.studio)?.name : '';
-  $('#meta').textContent = [VIEW_LABEL[filters.view], studioName, `${filtered.length.toLocaleString()} 件`].filter(Boolean).join(' · ');
-  $('#list-state').textContent = filtered.length
+  renderMeta();
+  $('#list-state').innerHTML = filtered.length
     ? ''
+    : activeConditions().length ? '該当する動画がありません<div class="btn-row" style="justify-content:center"><button class="btn" data-clear="all">すべての条件を外す</button></div>'
     : (!filters.q && !filters.studio && EMPTY[filters.view]) ? EMPTY[filters.view]
     : state.posts.size ? '該当する動画がありません'
     : crawl.running ? '収集中です。少し待つと表示されます…'
@@ -141,6 +145,35 @@ export function dropStaleFilters() {
 }
 
 const VIEW_LABEL = { '': '', new: '新着', fav: 'お気に入り', history: '履歴' };
+
+// 効いている条件（タブとスタジオ以外）。件数の横に × 付きで出し、押すと外せる
+function activeConditions() {
+  const c = [];
+  if (filters.q) c.push({ id: 'q', label: `“${filters.q}”` });
+  if (filters.dateBy === 'release') c.push({ id: 'dateBy', label: '発売日順' });
+  if (filters.sort === 'old') c.push({ id: 'sort', label: '古い順' });
+  if (filters.sort === 'random') c.push({ id: 'sort', label: 'ランダム' });
+  if (filters.site) c.push({ id: 'site', label: state.sites.find((s) => String(s.id) === String(filters.site))?.name || 'サイト' });
+  if (filters.hideNoThumb) c.push({ id: 'hideNoThumb', label: 'サムネなし除外' });
+  if (filters.studio) c.push({ id: 'studio', label: state.studios.find((x) => x.key === filters.studio)?.name || 'スタジオ' });
+  return c;
+}
+
+function renderMeta() {
+  const head = [VIEW_LABEL[filters.view], `${filtered.length.toLocaleString()} 件`].filter(Boolean).join(' · ');
+  $('#meta').innerHTML = `<span>${esc(head)}</span>` +
+    activeConditions().map((c) => `<button class="cond" data-clear="${c.id}" aria-label="${esc(c.label)}を外す">${esc(c.label)} <b>×</b></button>`).join('');
+}
+
+function clearCondition(id) {
+  const reset = { q: '', dateBy: 'post', sort: 'new', site: '', hideNoThumb: false, studio: '' };
+  if (id === 'all') Object.assign(filters, reset);
+  else filters[id] = reset[id];
+  if (id === 'q' || id === 'all') { $('#q').value = ''; $('#q-clear').style.display = 'none'; }
+  saveFilters();
+  renderChips();
+  render();
+}
 
 export function setView(view) {
   filters.view = view;
@@ -189,21 +222,32 @@ export function initList() {
   new IntersectionObserver((e) => { if (e[0].isIntersecting && shown < filtered.length) render(false); }, { rootMargin: '800px' })
     .observe($('#sentinel'));
 
-  let qTimer;
+  let qTimer, rememberTimer;
   $('#q').value = filters.q;
   $('#q-clear').style.display = filters.q ? 'block' : 'none';
   $('#q').addEventListener('input', () => {
     $('#q-clear').style.display = $('#q').value ? 'block' : 'none';
     clearTimeout(qTimer);
-    qTimer = setTimeout(() => { filters.q = $('#q').value.trim(); saveFilters(); render(); }, 250);
+    qTimer = setTimeout(() => {
+      filters.q = $('#q').value.trim();
+      saveFilters();
+      render();
+      // 入力が止まって 2 秒たち、結果があれば最近の検索に残す
+      clearTimeout(rememberTimer);
+      rememberTimer = setTimeout(() => { if (filtered.length) rememberQuery(filters.q); }, 2000);
+    }, 250);
   });
-  $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { rememberQuery($('#q').value); $('#q').blur(); } });
+  $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#q').blur(); });
   $('#q-clear').onclick = () => { $('#q').value = ''; $('#q').dispatchEvent(new Event('input')); $('#q').focus(); };
 
   // 検索欄が空のときは最近の検索を出す。候補のタップで blur より先に処理されるよう pointerdown で受ける
   $('#q').addEventListener('focus', renderSuggest);
   $('#q').addEventListener('input', renderSuggest);
-  $('#q').addEventListener('blur', () => { rememberQuery($('#q').value); setTimeout(() => $('#suggest').classList.add('hidden'), 150); });
+  $('#q').addEventListener('blur', () => {
+    // 結果が 0 件の語は残さない
+    if (filtered.length && filters.q === $('#q').value.trim()) rememberQuery(filters.q);
+    setTimeout(() => $('#suggest').classList.add('hidden'), 150);
+  });
   $('#suggest').addEventListener('pointerdown', (e) => {
     e.preventDefault(); // 検索欄のフォーカスを外さない
     const d = e.target.closest('[data-del]');
@@ -213,6 +257,11 @@ export function initList() {
   });
 
   // 表示の切り替え（新着・お気に入り・履歴）とスタジオは組み合わせられる
+  // 件数の横の条件チップ・0 件のときの解除ボタン
+  const onClear = (e) => { const b = e.target.closest('[data-clear]'); if (b) clearCondition(b.dataset.clear); };
+  $('#meta').addEventListener('click', onClear);
+  $('#list-state').addEventListener('click', onClear);
+
   $('#chips').onclick = (e) => {
     const b = e.target.closest('.chip');
     if (!b) return;
