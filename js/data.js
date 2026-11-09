@@ -6,7 +6,7 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode, releaseTitleKey } from './matching.js';
+import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode, releaseTitleKey, stripCode, safeUrl } from './matching.js';
 
 // 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
 const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
@@ -60,15 +60,35 @@ export async function loadAll() {
   rebuild();
 }
 
-// 品番の判定を改良したとき用: 品番のない保存済み投稿を判定し直す（変わったら true）
+// 品番の判定を改良したとき用: 保存済み投稿の品番を判定し直す（変わったら true）。
+// - 品番のない投稿 → 新しい判定で品番が取れれば付ける
+// - 一般語（Part-02 など）を誤って品番にしていた投稿 → 外す
+// - 外部 URL が http(s) でないリンクは捨てる
 function migratePost(p) {
-  if (p.code) return false;
+  let changed = false;
+  if (p.link && !safeUrl(p.link)) { p.link = ''; changed = true; }
+  if (p.code && extractCode(p.code) !== p.code) {
+    p.code = null;
+    p.group = groupKey(null, p.title, p.key);
+    changed = true;
+  }
+  if (p.code) return changed;
   const code = extractCode(p.title, p.tags || []);
-  if (!code) return false;
+  if (!code) return changed;
   p.code = code;
+  p.title = stripCode(p.title, code);
   p.group = groupKey(code, p.title, p.key);
-  p.tags = p.tags.filter((t) => !isCodeTag(t));
+  p.tags = (p.tags || []).filter((t) => !isCodeTag(t));
   return true;
+}
+
+// 検索用の文字列（投稿ごと）。title / tags が変わらない限り作り直さない
+const hayCache = new WeakMap();
+function hayOf(p) {
+  const sig = p.title + '\u0001' + (p.tags || []).join('\u0001');
+  let c = hayCache.get(p);
+  if (!c || c.sig !== sig) hayCache.set(p, (c = { sig, hay: sig.replace(/\u0001/g, '\n').normalize('NFKC').toLowerCase() }));
+  return c.hay;
 }
 
 export function rebuild() {
@@ -115,8 +135,9 @@ export function rebuild() {
       siteIds: new Set(rows.map((r) => r.siteId)),
       // どこかのサイトで最初に見つかった時刻（初回の全件取得分は 0 = NEW にしない）
       seenAt: rows.reduce((t, r) => Math.min(t, r.seenAt || 0), Infinity),
-      sources: rows.map((r) => ({ ...r, siteName: siteName[r.siteId] || '?' })),
-      hay: [...rows.map((r) => r.title), main.code || '', studio || '', ...rawTags].join('\n').normalize('NFKC').toLowerCase(),
+      // 投稿はコピーせず参照で持つ（6 万件を毎回コピーしないため。siteName はここで付けておく）
+      sources: rows.map((r) => { r.siteName = siteName[r.siteId] || '?'; return r; }),
+      hay: [...rows.map(hayOf), (main.code || '').toLowerCase(), (studio || '').normalize('NFKC').toLowerCase()].join('\n'),
     });
   }
   videos.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));

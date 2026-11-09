@@ -8,12 +8,18 @@ import * as db from './db.js';
 import { state, emit, rebuild, saveSite, DEFAULT_SITES } from './data.js';
 import { wpGet } from './wp.js';
 import { sleep, decodeEntities } from './util.js';
-import { isCodeTag, extractCode, stripCode, groupKey, pickStudio } from './matching.js';
+import { isCodeTag, extractCode, stripCode, groupKey, pickStudio, safeUrl } from './matching.js';
 
 const PER_PAGE = 100;
 const PAGE_DELAY_MS = 300;
 
-export const crawl = { running: false, added: 0 };
+export const crawl = { running: false, added: 0, generation: 0 };
+
+// 収集中にサイトの削除や収集データの削除が起きたら、走っている収集を打ち切るための目印
+class Aborted extends Error {}
+const checkAlive = (site, gen) => {
+  if (gen !== crawl.generation || !state.sites.includes(site)) throw new Aborted();
+};
 
 // 開発用: URL に ?dev を付けると、各サイト 1 ページ目だけ取って全件取得はしない
 const DEV = new URLSearchParams(location.search).has('dev');
@@ -67,7 +73,7 @@ async function toPosts(site, raw, { backfill }) {
     const prev = state.posts.get(key) || {};
     return {
       ...prev, // 詳細を開いたときに取った本文由来の情報（embeds など）を残す
-      key, siteId: site.id, postId: p.id, link: p.link, title: clean, date: p.date,
+      key, siteId: site.id, postId: p.id, link: safeUrl(p.link, site.url) || '', title: clean, date: p.date,
       thumb: media[p.featured_media] || prev.thumb || null,
       // 新着表示用。初回の全件取得で入った分は 0（NEW にしない）
       seenAt: prev.key ? prev.seenAt || 0 : backfill ? 0 : Date.now(),
@@ -80,14 +86,16 @@ async function toPosts(site, raw, { backfill }) {
 let rebuildTimer;
 function scheduleRebuild() {
   if (rebuildTimer) return;
-  rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuild(); emit('data'); }, 3000);
+  // 収集中の作り直しは重いので、間隔をあけてまとめて行う
+  rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuild(); emit('data'); }, 8000);
 }
 
-async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinity }) {
+async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinity, gen }) {
   let page = start, total = start;
   while (page <= Math.min(total, maxPage)) {
     site.status = `収集中 ${page}/${total} ページ`;
-    site.progress = { page, total };
+    // 全件取得の進み具合（差分パスで 1 ページ目に戻っても、バナーの % が跳ねないよう大きいほうを使う）
+    site.progress = { page: Math.max(page, site.backfillDone ? 0 : site.backfillPage || 0), total };
     emit('progress');
     const { data, totalPages } = await wpGet(site.url, 'posts', {
       per_page: PER_PAGE, page, _fields: 'id,date,link,title,featured_media,tags,categories',
@@ -95,6 +103,7 @@ async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinit
     total = totalPages;
     if (!data.length) break;
     const rows = await toPosts(site, data, { backfill: !!track });
+    checkAlive(site, gen);
     let known = 0;
     for (const p of rows) {
       if (state.posts.has(p.key)) known++; else crawl.added++;
@@ -112,25 +121,30 @@ async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinit
 }
 
 async function crawlSite(site, { full = false } = {}) {
+  const gen = crawl.generation;
   try {
     const track = !site.backfillDone;
     if (DEV) {
-      await crawlPages(site, 1, { stopWhenKnown: true, track: false, maxPage: 1 });
+      // 開発モードでも、初回の取得分は NEW にしない（track のときだけ backfill 扱い）
+      await crawlPages(site, 1, { stopWhenKnown: true, track, maxPage: 1, gen });
       site.status = 'OK（開発モード: 1 ページ目のみ）';
       site.error = false;
       site.lastRun = new Date().toISOString();
+      checkAlive(site, gen);
       await saveSite(site);
       return emit('progress');
     }
-    await crawlPages(site, 1, { stopWhenKnown: !full, track });
+    await crawlPages(site, 1, { stopWhenKnown: !full, track, gen });
     if (!full && !site.backfillDone) {
-      await crawlPages(site, site.backfillPage || 1, { stopWhenKnown: false, track });
+      await crawlPages(site, site.backfillPage || 1, { stopWhenKnown: false, track, gen });
     }
+    checkAlive(site, gen);
     site.backfillDone = true;
     site.progress = null;
     site.status = 'OK';
     site.error = false;
   } catch (e) {
+    if (e instanceof Aborted) return; // 削除されたサイト・消されたデータは書き戻さない
     site.status = 'エラー: ' + e.message;
     site.error = true;
   }
@@ -160,7 +174,7 @@ export async function collect({ siteId, full = false } = {}) {
 // アプリを開いたとき・画面に戻ったときに、前回から一定時間経っていれば新着を取りに行く
 // 初回の全件取得の進み具合（0〜1）。全件取得中のサイトがなければ null
 export function backfillProgress() {
-  const pending = state.sites.filter((s) => s.enabled && !s.backfillDone && !s.error);
+  const pending = state.sites.filter((s) => s.enabled && !s.backfillDone);
   if (!pending.length) return null;
   let done = 0, total = 0;
   for (const s of pending) {
@@ -170,12 +184,16 @@ export function backfillProgress() {
   return done / total;
 }
 
+// 全件取得が終わっていないサイトは、自動収集の間隔の設定やエラーに関係なく再開する
+// （エラーになったサイトは 5 分おいてから）。それ以外は前回から一定時間経っていれば新着を取りに行く
+const RETRY_MS = 5 * 60 * 1000;
 export async function maybeAutoCollect() {
+  if (crawl.running || !navigator.onLine) return;
+  const unfinished = !DEV && state.sites.some((s) => s.enabled && !s.backfillDone &&
+    (!s.error || Date.now() - new Date(s.lastRun || 0).getTime() > RETRY_MS));
   const min = await db.kvGet('intervalMin', 30);
-  if (!min || crawl.running || !navigator.onLine) return;
   const last = await db.kvGet('lastCollect', 0);
-  const unfinished = !DEV && state.sites.some((s) => s.enabled && !s.backfillDone && !s.error);
-  if (unfinished || Date.now() - last >= min * 60 * 1000) await collect();
+  if (unfinished || (min && Date.now() - last >= min * 60 * 1000)) await collect();
 }
 
 export async function addSite(input, { verify = true } = {}) {
@@ -191,6 +209,7 @@ export async function addSite(input, { verify = true } = {}) {
 }
 
 export async function removeSite(id) {
+  crawl.generation++;
   await db.deleteByIndex('posts', 'site', id);
   await db.del('sites', id);
   state.sites = state.sites.filter((s) => s.id !== id);
@@ -200,6 +219,7 @@ export async function removeSite(id) {
 }
 
 export async function wipeData() {
+  crawl.generation++;
   await db.clear('posts');
   await db.clear('terms');
   state.posts.clear();

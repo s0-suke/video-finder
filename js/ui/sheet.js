@@ -2,6 +2,7 @@
 // 開いたときに履歴を 1 つ積むので、iPhone の戻るスワイプ / 戻るボタンで閉じられる
 
 import { $ } from '../util.js';
+import { emit } from '../data.js';
 
 const sheet = () => $('#sheet');
 let onClose = null;
@@ -30,6 +31,7 @@ export function hide() {
   $('#backdrop').classList.remove('open');
   document.body.style.overflow = '';
   if (onClose) { onClose(); onClose = null; }
+  emit('sheetclose');
   // 閉じるアニメーションの後に中身（再生中の iframe など）を消す
   setTimeout(() => { if (!isSheetOpen()) sheet().innerHTML = ''; }, 300);
 }

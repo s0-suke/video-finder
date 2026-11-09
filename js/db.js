@@ -35,8 +35,15 @@ export function openDB() {
         d.createObjectStore('release', { keyPath: 'id' });
       }
     };
-    r.onsuccess = () => { db = r.result; resolve(db); };
+    r.onsuccess = () => {
+      db = r.result;
+      // 別のタブで新しい版が開かれたら、こちらの接続を閉じて相手の更新を妨げない
+      db.onversionchange = () => { db.close(); location.reload(); };
+      resolve(db);
+    };
     r.onerror = () => reject(r.error);
+    // 古い版を開いたままのタブがあると更新が待たされる
+    r.onblocked = () => console.warn('ほかのタブで古い版が開いています。閉じると更新が進みます');
   });
 }
 
@@ -56,6 +63,7 @@ export function putAll(name, rows) {
     for (const row of rows) s.put(row);
     t.oncomplete = resolve;
     t.onerror = () => reject(t.error);
+    t.onabort = () => reject(t.error || new Error('保存が中断されました（容量不足の可能性）'));
   });
 }
 

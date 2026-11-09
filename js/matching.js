@@ -3,21 +3,49 @@
 // 品番（例: MR-KR2387, GT-2720, SUPD-123）
 export const CODE_RE = /\b([A-Z]{2,8}-(?:[A-Z]{1,4}-?)?\d{2,6})\b/i;
 
+// 品番の形をしているが品番ではない一般的な語（Part-02 / Vol-01 / Best-of-2023 / COVID-19 など）
+const NOT_CODE = /^(PART|PT|VOL|EP|EPS|EPISODE|SCENE|CHAPTER|CH|BEST|TOP|NO|NUM|COVID|FULLHD|FHD|HD|UHD|JAPAN|DAY|YEAR|SEASON|DISC|CD|DVD|MP|H|X|COLLECTION)\b/i;
+const isYear = (digits) => /^(19|20)\d\d$/.test(digits);
+
+function codeIn(text) {
+  for (const m of text.matchAll(new RegExp(CODE_RE.source, 'gi'))) {
+    const code = m[1];
+    const digits = code.match(/(\d+)$/)[1];
+    if (NOT_CODE.test(code) || /-OF-/i.test(code) || isYear(digits)) continue;
+    return code.toUpperCase();
+  }
+  return null;
+}
+
 export function extractCode(title, tags = []) {
-  const m = title.match(CODE_RE);
-  if (m) return m[1].toUpperCase();
+  const fromTitle = codeIn(title);
+  if (fromTitle) return fromTitle;
   for (const t of tags) {
     const mt = t.match(CODE_RE);
-    if (mt && mt[0].length >= t.trim().length - 1) return mt[1].toUpperCase();
-    // タグ全体がハイフンなしの品番（BWB383 など）なら、英字と数字の間にハイフンを補う
-    const bare = t.trim().match(/^([A-Z]{2,6})(\d{3,6})$/i);
-    if (bare) return `${bare[1]}-${bare[2]}`.toUpperCase();
+    if (mt && mt[0].length >= t.trim().length - 1) {
+      const c = codeIn(t);
+      if (c) return c;
+    }
+    // タグ全体がハイフンなしの品番（BWB383 など）なら、英字と数字の間にハイフンを補う（Japan2024 のような年は除く）
+    const bare = t.trim().match(/^([A-Z]{2,5})(\d{3,5})$/i);
+    if (bare && !isYear(bare[2]) && !NOT_CODE.test(bare[1])) return `${bare[1]}-${bare[2]}`.toUpperCase();
   }
   return null;
 }
 
 // タグが品番そのものか（表示用のタグから除く）
-export const isCodeTag = (t) => CODE_RE.test(t) || /^[A-Z]{2,6}\d{3,6}$/i.test(t.trim());
+export const isCodeTag = (t) => extractCode('', [t]) !== null;
+
+// 外部サイトから取った URL を、base を基準に解決して http(s) のものだけ返す（javascript: などは捨てる）
+export function safeUrl(u, base) {
+  if (!u) return null;
+  try {
+    const url = new URL(String(u).trim(), base);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}
 
 // 比較用に品番からハイフンを除く（MR-KR2387 と MRKR2387 を同一視）
 export const normalizeCode = (code) => code.replace(/-/g, '').toUpperCase();

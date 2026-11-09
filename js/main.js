@@ -10,7 +10,7 @@ import * as details from './details.js';
 import * as history from './history.js';
 import { initRelease, collectRelease } from './release.js';
 import { initSheet, hide as hideSheet } from './ui/sheet.js';
-import { initList, render, renderChips, saveFilters } from './ui/list.js';
+import { initList, render, renderChips, saveFilters, dropStaleFilters } from './ui/list.js';
 import { openFilters } from './ui/filters.js';
 import { initSettings, openSettings } from './ui/settings.js';
 
@@ -43,6 +43,7 @@ async function boot() {
     }
   });
 
+  dropStaleFilters();
   saveFilters();
   renderChips();
   route();

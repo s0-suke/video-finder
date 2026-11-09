@@ -15,6 +15,7 @@
 
 import * as db from './db.js';
 import { toast } from './util.js';
+import { safeUrl } from './matching.js';
 import { registerSettingsSection } from './ui/settings.js';
 
 const KV_KEY = 'playerAdblock';
@@ -68,7 +69,8 @@ export function mountPlayer(container, url) {
 }
 
 function render(container, url, blocked) {
-  if (!/^https?:\/\//i.test(url)) url = new URL(url, location.href).href; // 「//host/...」形式も受ける
+  url = safeUrl(url, 'https://example.invalid/'); // http(s) 以外（javascript: など）は再生しない。「//host/...」形式も受ける
+  if (!url) return toast('このプレイヤーは開けません');
 
   const frame = document.createElement('iframe');
   if (blocked) frame.setAttribute('sandbox', SANDBOX);
@@ -100,12 +102,14 @@ function render(container, url, blocked) {
 
   // 2 回目の読み込み = プレイヤーが別ページへ移った。morencius / voe 系はサンドボックスを検知すると
   // 「sandboxed」の案内ページへ移るので、その場合は再生できないことを枠の下に出す
-  // （iframe の中身は別オリジンで読めないため、読み込み回数で判断する）
-  let loads = 0;
+  // （iframe の中身は別オリジンで読めないため、読み込み回数で判断する。JS で一度リダイレクトするだけの
+  //  プレイヤーを誤判定しないよう、最初の読み込みから 4 秒以内の 2 回目だけを拒否とみなす）
+  let loads = 0, firstAt = 0;
   // 拒まれたら提供元を記録し、そのままブロックなしで開き直す
   frame.addEventListener('load', async () => {
     loads += 1;
-    if (!blocked || loads !== 2 || !frame.isConnected) return;
+    if (loads === 1) firstAt = Date.now();
+    if (!blocked || loads !== 2 || Date.now() - firstAt > 4000 || !frame.isConnected) return;
     const host = hostOf(url);
     refused.add(host);
     await db.kvSet(KV_REFUSED, [...refused]);

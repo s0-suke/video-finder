@@ -3,15 +3,20 @@
 import * as db from './db.js';
 import { state } from './data.js';
 import { wpGet } from './wp.js';
+import { safeUrl } from './matching.js';
 
-const CONTENT_VERSION = 2; // 取り出し方を変えたら上げる（古いキャッシュを取り直す）
+const CONTENT_VERSION = 3; // 取り出し方を変えたら上げる（古いキャッシュを取り直す）
 
-export function parseContent(html) {
+// URL は掲載元の投稿 URL を基準に解決し、http(s) 以外（javascript: など）は捨てる。
+// 遅延読み込みプラグインの data-src / data-lazy-src を優先する
+const srcOf = (el, base) => safeUrl(el.getAttribute('data-src') || el.getAttribute('data-lazy-src') || el.getAttribute('src'), base);
+
+export function parseContent(html, base) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
-  const embeds = [...doc.querySelectorAll('iframe[src]')].map((f) => f.getAttribute('src'));
+  const embeds = [...doc.querySelectorAll('iframe')].map((f) => srcOf(f, base)).filter(Boolean);
   const images = [...doc.querySelectorAll('img')]
-    .map((img) => img.getAttribute('data-src') || img.getAttribute('src'))
-    .filter((src) => src && /^https?:/.test(src) && !/emoji|gravatar|icon|logo|banner/i.test(src));
+    .map((img) => srcOf(img, base))
+    .filter((src) => src && !/emoji|gravatar|icon|logo|banner/i.test(src));
   const description = [...doc.querySelectorAll('p')]
     .filter((p) => !p.querySelector('iframe'))
     .map((p) => p.textContent.trim())
@@ -34,9 +39,13 @@ export function loadContent(post) {
 async function fetchContent(post) {
   const site = state.sites.find((s) => s.id === post.siteId);
   const { data } = await wpGet(site.url, 'posts/' + post.postId, { _fields: 'content' });
-  Object.assign(post, parseContent((data.content && data.content.rendered) || ''), { contentVersion: CONTENT_VERSION });
-  if (!post.thumb && post.images.length) post.thumb = post.images[0];
-  state.posts.set(post.key, post);
-  await db.put('posts', post);
-  return post;
+  const parsed = parseContent((data.content && data.content.rendered) || '', post.link || site.url);
+  // 収集で更新された最新の行に、本文由来の項目だけを足して保存する（古いコピーで上書きしない）
+  const latest = state.posts.get(post.key) || post;
+  for (const p of new Set([latest, post])) {
+    Object.assign(p, parsed, { contentVersion: CONTENT_VERSION });
+    if (!p.thumb && parsed.images.length) p.thumb = parsed.images[0];
+  }
+  await db.put('posts', latest);
+  return latest;
 }

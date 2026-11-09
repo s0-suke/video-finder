@@ -73,3 +73,23 @@ test('otokoki の先頭の括弧書きを外したタイトルキーが、掲載
   assert.equal(releaseTitleKey('【インディーズ：Full HD】〈裏野ゲイ〉ノンケマッチョを生ハメ!'), releaseTitleKey('ノンケマッチョを生ハメ！'));
   assert.equal(releaseTitleKey('短い'), null);
 });
+
+test('Part-02 / Vol-01 / Best-of-2023 / COVID-19 / Japan2024 などは品番にしない', () => {
+  for (const t of ['Hot Guys Part-02', 'Vol-01 special', 'Best-of-2023', 'Episode-12', 'COVID-19 times', 'FullHD-1080']) {
+    assert.equal(extractCode(t), null, t);
+  }
+  assert.equal(extractCode('x', ['Japan2024']), null);
+  assert.equal(extractCode('x', ['FullHD1080']), null);
+  assert.equal(extractCode('Part-02 GT-2720 本編'), 'GT-2720', '一般語の後ろの本物の品番は拾う');
+});
+
+import { safeUrl } from '../js/matching.js';
+
+test('外部 URL は http(s) だけ通し、相対パスは掲載元を基準に解決する', () => {
+  assert.equal(safeUrl('javascript:alert(1)', 'https://a.com/p/'), null);
+  assert.equal(safeUrl(' JAVASCRIPT:alert(1)', 'https://a.com/p/'), null);
+  assert.equal(safeUrl('data:text/html,x', 'https://a.com/p/'), null);
+  assert.equal(safeUrl('/embed/xx', 'https://a.com/p/'), 'https://a.com/embed/xx');
+  assert.equal(safeUrl('//cdn.b.com/e/1', 'https://a.com/p/'), 'https://cdn.b.com/e/1');
+  assert.equal(safeUrl('', 'https://a.com/'), null);
+});

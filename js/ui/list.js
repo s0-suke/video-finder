@@ -143,6 +143,15 @@ function renderSuggest() {
   box.classList.remove('hidden');
 }
 
+// 保存してある絞り込みの対象（スタジオ・サイト）がなくなっていたら外す。外したら true
+export function dropStaleFilters() {
+  if (!state.videos.length) return false;
+  let changed = false;
+  if (filters.studio && !state.studios.some((s) => s.key === filters.studio)) { filters.studio = ''; changed = true; }
+  if (filters.site && !state.sites.some((s) => String(s.id) === String(filters.site) && s.enabled)) { filters.site = ''; changed = true; }
+  return changed;
+}
+
 export function setQuery(q) {
   $('#q').value = q;
   filters.q = q;
@@ -232,6 +241,7 @@ export function initList() {
 
   // 収集でデータが増えたとき：一覧の先頭を見ていれば描き直す
   on('data', () => {
+    if (dropStaleFilters()) saveFilters();
     renderChips();
     if (location.hash !== '#settings' && !isSheetOpen() && window.scrollY < 300) render();
   });
@@ -246,5 +256,8 @@ export function initList() {
     }
   };
   on('favs', refresh('fav'));
-  on('history', () => { if (filters.view === 'history' && !isSheetOpen()) render(); });
+  // 再生はシートの中なので、履歴の表示中ならシートを閉じたときに並びを更新する
+  let historyDirty = false;
+  on('history', () => { if (filters.view === 'history') historyDirty = true; });
+  on('sheetclose', () => { if (historyDirty && filters.view === 'history') { historyDirty = false; render(); } });
 }
