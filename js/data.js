@@ -124,10 +124,10 @@ export function rebuild() {
       title: stripCode(main.title, main.code), // 保存済みのタイトルに品番が残っていても表示では外す
       thumb: main.thumb,
       date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
-      // 発売日の目安。otokoki になければ、いちばん早い掲載日で代用する（releaseKnown = false）
+      // 発売日の目安（otokoki の掲載日）。照合できなければ空（不明）。掲載日では代用しない
       ...(() => {
         const known = releaseOf(main.code, rows);
-        return { release: known || rows.reduce((d, r) => (!d || r.date < d ? r.date : d), ''), releaseKnown: !!known };
+        return { release: known || '', releaseKnown: !!known };
       })(),
       studio,
       studioKey: sKey,

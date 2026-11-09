@@ -7,10 +7,15 @@
 import { $, $$ } from '../util.js';
 import { state, on, isNew } from '../data.js';
 import { filters, setView } from './list.js';
+import { feature } from '../features.js';
 
 const current = () => (location.hash === '#settings' ? 'settings' : filters.view || '');
 
 export function renderTabs() {
+  // オフにした機能のタブは隠す。開いていたら ホーム に戻す
+  const hiddenTabs = { new: !feature('newBadge'), history: !feature('history') };
+  if (hiddenTabs[filters.view]) setView('');
+  for (const b of $$('#tabbar button')) b.hidden = !!hiddenTabs[b.dataset.tab];
   const cur = current();
   for (const b of $$('#tabbar button')) b.classList.toggle('on', b.dataset.tab === cur);
   $('#dock').classList.toggle('no-search', cur === 'settings');
@@ -39,6 +44,7 @@ export function initTabbar() {
   };
   addEventListener('hashchange', renderTabs);
   on('data', renderTabs);
+  on('features', renderTabs);
 
   // iOS ではキーボードが出ても fixed の要素が隠れることがあるので、表示領域の変化に合わせて持ち上げる
   const vv = window.visualViewport;

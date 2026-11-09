@@ -21,12 +21,13 @@
 import * as db from './db.js';
 import { wpGet } from './wp.js';
 import { loadContent } from './source.js';
+import { noteRelease } from './release.js';
 import { state } from './data.js';
 import { normalizeCode, normalizeTitle, stripCode, studioKey, safeUrl } from './matching.js';
 import { esc, decodeEntities } from './util.js';
 
 const OTOKOKI = 'https://otokoki.net/';
-const CACHE_VERSION = 2; // 保存する形や探し方を変えたら上げる（古いキャッシュを取り直す）
+const CACHE_VERSION = 3; // 保存する形や探し方を変えたら上げる（古いキャッシュを取り直す）
 const DAY = 24 * 60 * 60 * 1000;
 const TTL_FOUND = 14 * DAY;
 const TTL_MISSING = 3 * DAY;
@@ -98,16 +99,19 @@ async function loadOtokoki(video) {
   try { cached = await db.get('details', video.key); } catch {}
   if (cached && cached.version === CACHE_VERSION &&
       Date.now() - cached.fetchedAt < (cached.found ? TTL_FOUND : TTL_MISSING)) {
+    if (cached.otokoki && cached.otokoki.date) noteRelease(video, cached.otokoki.date);
     return cached.otokoki || null;
   }
   const post = await findPost(video);
   const otokoki = post ? await buildOtokoki(post) : null;
+  // 見つかった記事の日付を、この動画の発売日の目安として記録する（全件の対応表で照合できなかった動画も埋まる）
+  if (otokoki && otokoki.date) noteRelease(video, otokoki.date);
   const row = { key: video.key, fetchedAt: Date.now(), version: CACHE_VERSION, found: !!otokoki, otokoki };
   try { await db.put('details', row); } catch {}
   return otokoki;
 }
 
-const SEARCH_FIELDS = 'id,link,title,content,featured_media,categories';
+const SEARCH_FIELDS = 'id,date,link,title,content,featured_media,categories';
 
 async function search(q) {
   const { data } = await wpGet(OTOKOKI, 'posts', { search: q, per_page: 5, _fields: SEARCH_FIELDS });
@@ -183,6 +187,7 @@ async function buildOtokoki(post) {
   ]);
   return {
     id: post.id,
+    date: post.date, // otokoki の掲載日 = 発売日の目安
     link: safeUrl(post.link, OTOKOKI),
     title: decodeEntities(post.title.rendered),
     description: otokokiDescription(post.content.rendered),

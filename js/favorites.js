@@ -74,7 +74,9 @@ export function favButton(video) {
   b.type = 'button';
   b.className = 'btn fav-btn';
   // ラベルは固定にし、状態は aria-pressed と ♡/♥・色で示す（読み上げでは「お気に入り、オン/オフ」になる）
-  b.innerHTML = '<span class="fav-heart" aria-hidden="true"></span><span class="fav-label">お気に入り</span>';
+  // 再生ボタンの幅を優先するため、見た目はハートだけ（ラベルは読み上げ用）
+  b.setAttribute('aria-label', 'お気に入り');
+  b.innerHTML = '<span class="fav-heart" aria-hidden="true"></span>';
   const heart = b.querySelector('.fav-heart');
   const paint = () => {
     const on = isFav(video.key);

@@ -9,6 +9,7 @@ import { crawl, collect } from '../crawler.js';
 import { isFav, favAddedAt, toggleFav } from '../favorites.js';
 import { viewedAt } from '../history.js';
 import { normalizeCode } from '../matching.js';
+import { feature } from '../features.js';
 import { isSheetOpen } from './sheet.js';
 import { openDetail } from './detail.js';
 import { openFilters } from './filters.js';
@@ -20,7 +21,6 @@ const CHIP_STUDIOS = 15;
 const saved = (() => { try { return JSON.parse(localStorage.getItem('filters3') || '{}'); } catch { return {}; } })();
 // dateBy: 'post' = 各サイトの掲載日 / 'release' = 元動画の発売日（目安。release.js）
 export const filters = { q: '', studio: '', site: '', sort: 'new', dateBy: 'post', view: '', ...saved };
-const dateOf = (v) => (filters.dateBy === 'release' ? v.release : v.date);
 let filtered = [];
 let shown = 0;
 
@@ -54,8 +54,13 @@ function applyFilters() {
     filtered.sort((a, b) => r.get(a.key) - r.get(b.key));
   } else {
     // state.videos は掲載日の新しい順。発売日で並べるときだけ並べ直す
-    if (filters.dateBy === 'release') filtered.sort((a, b) => (a.release < b.release ? 1 : a.release > b.release ? -1 : 0));
-    if (filters.sort === 'old') filtered.reverse();
+    // 発売日で並べるときは発売日の分かるものだけを並べ替え、不明なものは（掲載日の順で）後ろに回す
+    if (filters.dateBy === 'release') {
+      const known = filtered.filter((v) => v.release).sort((a, b) => (a.release < b.release ? 1 : a.release > b.release ? -1 : 0));
+      const unknown = filtered.filter((v) => !v.release);
+      if (filters.sort === 'old') known.reverse();
+      filtered = [...known, ...unknown];
+    } else if (filters.sort === 'old') filtered.reverse();
   }
 }
 
@@ -73,12 +78,12 @@ function cardHTML(v, i) {
     <div class="thumb">
       ${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(v.studio || v.title.slice(0, 12))}</div>`}
       ${v.code ? `<span class="badge code">${esc(v.code)}</span>` : ''}
-      ${isNew(v) ? '<span class="badge new">NEW</span>' : ''}
+      ${feature('newBadge') && isNew(v) ? '<span class="badge new">NEW</span>' : ''}
       ${isFav(v.key) ? '<span class="badge fav" aria-label="お気に入り">♥</span>' : ''}
     </div>
-    ${viewedAt(v.key) ? '<span class="watched">視聴済み</span>' : ''}
+    ${feature('history') && viewedAt(v.key) ? '<span class="watched">視聴済み</span>' : ''}
     <div class="title">${esc(v.title)}</div>
-    <div class="sub">${filters.dateBy === 'release' ? '発売 ' : ''}${esc(fmtDate(dateOf(v)))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
+    <div class="sub">${filters.dateBy === 'release' ? (v.release ? '発売 ' + esc(fmtDate(v.release)) : '発売日不明') : esc(fmtDate(v.date))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
   </button>`;
 }
 
@@ -146,6 +151,7 @@ const RECENT_MAX = 12;
 const loadRecent = () => { try { return JSON.parse(localStorage.getItem('recentQueries') || '[]'); } catch { return []; } };
 function saveRecent(list) { try { localStorage.setItem('recentQueries', JSON.stringify(list.slice(0, RECENT_MAX))); } catch {} }
 function rememberQuery(q) {
+  if (!feature('recentSearch')) return;
   q = q.trim();
   if (q.length < 2) return;
   saveRecent([q, ...loadRecent().filter((x) => x !== q)]);
@@ -154,7 +160,7 @@ function rememberQuery(q) {
 function renderSuggest() {
   const box = $('#suggest');
   const recent = loadRecent();
-  if ($('#q').value || !recent.length) return box.classList.add('hidden');
+  if (!feature('recentSearch') || $('#q').value || !recent.length) return box.classList.add('hidden');
   box.innerHTML = `<div class="suggest-head">最近の検索</div>` +
     recent.map((q) => `<div class="suggest-row"><button class="suggest-q" data-q="${esc(q)}">${esc(q)}</button><button class="suggest-del" data-del="${esc(q)}" aria-label="削除">×</button></div>`).join('');
   box.classList.remove('hidden');
@@ -221,7 +227,7 @@ export function initList() {
   let pressTimer = null, pressed = false;
   $('#grid').addEventListener('touchstart', (e) => {
     const c = e.target.closest('.card');
-    if (!c) return;
+    if (!c || !feature('longPressFav')) return;
     pressed = false;
     pressTimer = setTimeout(async () => {
       pressed = true;
@@ -245,7 +251,7 @@ export function initList() {
   const ptr = $('#ptr');
   let pullStart = null, pulled = 0;
   addEventListener('touchstart', (e) => {
-    pullStart = window.scrollY <= 0 && !isSheetOpen() && location.hash !== '#settings' ? e.touches[0].clientY : null;
+    pullStart = feature('pullRefresh') && window.scrollY <= 0 && !isSheetOpen() && location.hash !== '#settings' ? e.touches[0].clientY : null;
   }, { passive: true });
   addEventListener('touchmove', (e) => {
     if (pullStart == null) return;

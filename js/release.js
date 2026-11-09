@@ -11,7 +11,7 @@ import * as db from './db.js';
 import { state, rebuild, emit } from './data.js';
 import { wpGet } from './wp.js';
 import { sleep, decodeEntities } from './util.js';
-import { releaseCode, releaseTitleKey } from './matching.js';
+import { releaseCode, releaseTitleKey, normalizeCode } from './matching.js';
 import { registerSettingsSection } from './ui/settings.js';
 
 const OTOKOKI = 'https://otokoki.net/';
@@ -115,6 +115,17 @@ export async function collectRelease({ force = false } = {}) {
     emit('data');
     emit('progress');
   }
+}
+
+// 詳細を開いて otokoki の記事が見つかったときに、その動画の発売日の目安を記録する
+export async function noteRelease(video, date) {
+  if (!date || (video.releaseKnown && video.release === date)) return;
+  const row = { id: 'v:' + video.key, date, code: video.code ? normalizeCode(video.code) : null, tkey: releaseTitleKey(video.title) };
+  index(row);
+  video.release = date;
+  video.releaseKnown = true;
+  try { await db.put('release', row); } catch {}
+  emit('release', video.key);
 }
 
 export async function wipeRelease() {

@@ -6,16 +6,25 @@
 //   - 詳細情報:    details.js の mountDetails(container, video, { onTag, onStudio })
 
 import { esc, fmtDate } from '../util.js';
-import { state } from '../data.js';
+import { state, on } from '../data.js';
 import { loadContent } from '../source.js';
 import { mountPlayer } from '../player.js';
 import { favButton } from '../favorites.js';
 import { mountDetails } from '../details.js';
 import { recordView } from '../history.js';
+import { feature } from '../features.js';
 import { openSheet, closeSheet } from './sheet.js';
 import { setQuery, setStudio } from './list.js';
 
 const RELATED = 12;
+
+// 詳細情報の取得で発売日が分かったら、開いている詳細の表示をその場で更新する
+let shown = null; // { video, el }
+on('release', (key) => {
+  if (!shown || shown.video.key !== key) return;
+  const rel = shown.el.querySelector('[data-role="release"]');
+  if (rel) rel.textContent = `発売 ${fmtDate(shown.video.release)}`;
+});
 
 function go(step) {
   if (!nav) return;
@@ -26,7 +35,7 @@ function go(step) {
 
 // 同じスタジオの動画（新しい順。自分自身は除く）
 function relatedHTML(video) {
-  if (!video.studioKey) return '';
+  if (!feature('related') || !video.studioKey) return '';
   const list = [];
   for (const v of state.videos) {
     if (v.studioKey === video.studioKey && v.key !== video.key && v.title !== video.title) list.push(v);
@@ -51,7 +60,7 @@ let nav = null; // { list, index }
 // opts.list / opts.index を渡すと、その並びで前後の動画へスワイプで移れる
 export function openDetail(video, opts = {}) {
   if (!video) return;
-  nav = opts.list ? { list: opts.list, index: opts.index } : null;
+  nav = opts.list && feature('swipeNav') ? { list: opts.list, index: opts.index } : null;
   const el = document.createElement('div');
   el.className = 'detail';
   el.innerHTML = `
@@ -65,7 +74,7 @@ export function openDetail(video, opts = {}) {
       ${video.code ? `<span>${esc(video.code)}</span>` : ''}
       ${video.studio ? `<button class="link" data-studio="${esc(video.studioKey)}">${esc(video.studio)}</button>` : ''}
       <span>掲載 ${esc(fmtDate(video.date))}</span>
-      <span title="${video.releaseKnown ? 'otokoki の掲載日' : '最も早い掲載日'}">発売 ${esc(fmtDate(video.release))}${video.releaseKnown ? '' : '?'}</span>
+      <span data-role="release">${video.release ? `発売 ${esc(fmtDate(video.release))}` : '発売日不明'}</span>
     </div>
     <div data-role="details"></div>
     ${video.tags.length ? `<div class="tags">${video.tags.map((t) => `<button class="tag" data-q="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
@@ -129,6 +138,8 @@ export function openDetail(video, opts = {}) {
   });
 
   openSheet(el);
+
+  shown = { video, el };
 
   // 各掲載サイトの本文からプレイヤーを取り出す。最初に見つかったものを大きな再生ボタンに割り当てる
   const main = el.querySelector('.play-main');

@@ -2,12 +2,12 @@
 
 /* 詳細シートのハートボタン（「▶ 再生」の横に並ぶ） */
 .detail-actions .fav-btn {
-  flex: none; height: 44px; min-width: 44px; padding: 0 14px; gap: 6px;
+  flex: none; height: 44px; width: 52px; padding: 0; gap: 0;
   justify-content: center; font-size: 14px; font-weight: 600;
   touch-action: manipulation; user-select: none; -webkit-user-select: none;
   transition: background .15s, border-color .15s, color .15s;
 }
-.fav-btn .fav-heart { font-size: 18px; line-height: 1; display: inline-block; }
+.fav-btn .fav-heart { font-size: 22px; line-height: 1; display: inline-block; }
 .fav-btn.on { color: #ff6b8a; border-color: rgba(255,107,138,.55); background: rgba(255,107,138,.12); }
 .fav-btn:active { transform: scale(.96); }
 .fav-btn.pop .fav-heart { animation: fav-pop .35s ease-out; }

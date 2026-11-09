@@ -33,7 +33,7 @@ test('統合キーが変わった動画を品番（ハイフン違いも）か�
   assert.equal(findMoved({ code: 'XX-9', title: '別作品' }), null);
 });
 
-test('発売日の目安: otokoki の日付があればそれを、なければ最も早い掲載日を使う', () => {
+test('発売日の目安: otokoki の日付があればそれを使い、なければ不明（掲載日で代用しない）', () => {
   state.sites = [{ id: 1, name: 'a', enabled: true }];
   state.posts = new Map([
     ['1:1', post(1, 1, { title: '作品B', code: 'GT-2', group: 'code:GT2', date: '2026-11-01' })],
@@ -45,7 +45,7 @@ test('発売日の目安: otokoki の日付があればそれを、なければ�
   const c = state.videos.find((v) => v.title === '作品C');
   assert.equal(b.release, '2026-08-01');
   assert.equal(b.releaseKnown, true);
-  assert.equal(c.release, '2026-10-01');
+  assert.equal(c.release, '');
   assert.equal(c.releaseKnown, false);
   state.release.byCode.clear();
 });

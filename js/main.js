@@ -9,6 +9,8 @@ import * as favorites from './favorites.js';
 import * as details from './details.js';
 import * as history from './history.js';
 import { initRelease, collectRelease } from './release.js';
+import * as features from './features.js';
+import { feature } from './features.js';
 import { initSheet, hide as hideSheet } from './ui/sheet.js';
 import { initList, render, renderChips, saveFilters, dropStaleFilters } from './ui/list.js';
 import { openFilters } from './ui/filters.js';
@@ -30,7 +32,7 @@ function installTip() {
   const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
   let dismissed = false;
   try { dismissed = localStorage.getItem('installTipDismissed') === '1'; } catch {}
-  if (!ios || standalone || dismissed) return;
+  if (!ios || standalone || dismissed || !feature('installTip')) return;
   const el = $('#install-tip');
   el.innerHTML = '<b>ホーム画面に追加すると、アプリとして全画面で使えます</b><br>共有ボタン →「ホーム画面に追加」。収集したデータも消えにくくなります。<button class="close" aria-label="閉じる">×</button>';
   el.classList.remove('hidden');
@@ -44,6 +46,7 @@ async function boot() {
   await openDB();
   await loadAll();
   await initCrawler();
+  features.init();
   await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease()]);
 
   initSheet();
@@ -54,7 +57,7 @@ async function boot() {
   on('progress', () => {
     $('#progress').classList.toggle('on', crawl.running);
     // 初回の全件取得中は一覧の上に進み具合を出す
-    const p = crawl.running ? backfillProgress() : null;
+    const p = crawl.running && feature('backfillBanner') ? backfillProgress() : null;
     $('#banner').classList.toggle('hidden', p == null);
     if (p != null) {
       $('#banner').innerHTML = `<b>はじめての取得中… ${Math.floor(p * 100)}%</b><br>アプリを開いたままにしておくと早く終わります。閉じても次に開いたとき続きから再開します。<div class="bar"><span style="width:${(p * 100).toFixed(1)}%"></span></div>`;
@@ -62,6 +65,8 @@ async function boot() {
   });
 
   installTip();
+  // 機能のオン/オフを変えたら一覧を描き直す
+  on('features', () => { renderChips(); if (location.hash !== '#settings') render(); });
   dropStaleFilters();
   saveFilters();
   renderChips();
