@@ -1,7 +1,7 @@
 /* favorites.js 用のスタイル */
 
 /* 詳細シートのハートボタン（「▶ 再生」の横に並ぶ） */
-.detail-bar .fav-btn {
+.detail-actions .fav-btn {
   flex: none; height: 48px; width: 52px; padding: 0; gap: 0;
   justify-content: center; font-size: 14px; font-weight: 600;
   touch-action: manipulation; user-select: none; -webkit-user-select: none;

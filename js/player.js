@@ -26,6 +26,7 @@ const hostOf = (url) => { try { return new URL(url, location.href).hostname; } c
 
 // allow-popups / allow-top-navigation は付けない（広告タブ・画面遷移の防止）
 const SANDBOX = 'allow-scripts allow-same-origin allow-presentation allow-forms';
+// ピクチャインピクチャ・全画面を許可する（iOS は全画面の標準プレーヤーから PiP に入れる）
 const ALLOW = 'autoplay; fullscreen; encrypted-media; picture-in-picture';
 
 let adblock = true; // 設定値（既定オン）
@@ -77,6 +78,8 @@ function render(container, url, blocked) {
   if (blocked) frame.setAttribute('sandbox', SANDBOX);
   frame.setAttribute('allow', ALLOW);
   frame.setAttribute('allowfullscreen', '');
+  frame.setAttribute('webkitallowfullscreen', ''); // 古い WebKit 向け
+  frame.setAttribute('allowpictureinpicture', '');
   frame.setAttribute('referrerpolicy', 'no-referrer');
   frame.src = url;
 

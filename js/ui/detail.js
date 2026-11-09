@@ -5,7 +5,8 @@
 //   - お気に入り:  favorites.js の favButton(video)
 //   - 詳細情報:    details.js の mountDetails(container, video, { onTag, onStudio })
 //
-// 片手で使えるよう、操作（‹ 前 / ▶ 再生 / ♡ / 次 ›）はシートの下端に固定したバーに置く。
+// 再生・お気に入りはサムネイルのすぐ下（同じ動画の情報の近くに置く）。
+// 前後の動画への移動（‹ 前へ / 次へ ›、関連動画からは ‹ 戻る）は片手で届くよう下端に固定したバーに置く。
 // シートの高さは一定にして、動画を切り替えてもボタンの位置が動かないようにする。
 
 import { esc, fmtDate } from '../util.js';
@@ -79,7 +80,10 @@ export function openDetail(video, opts = {}) {
     <div class="hero" data-role="hero">${video.thumb
       ? `<img src="${esc(video.thumb)}" referrerpolicy="no-referrer" alt="">`
       : `<div class="ph">${esc(video.studio || video.title.slice(0, 16))}</div>`}</div>
-    ${nav ? `<div class="detail-pos">${(nav.index + 1).toLocaleString()} / ${nav.list.length.toLocaleString()}</div>` : ''}
+    <div class="detail-actions">
+      <button class="btn primary play-main" disabled>確認中…</button>
+      <span data-role="fav"></span>
+    </div>
     <h2>${esc(video.title)}</h2>
     <div class="kv">
       ${video.code ? `<span>${esc(video.code)}</span>` : ''}
@@ -99,14 +103,14 @@ export function openDetail(video, opts = {}) {
           ${s.link ? `<a class="btn" href="${esc(s.link)}" target="_blank" rel="noopener noreferrer">サイトで開く ↗</a>` : ''}
         </div>
       </div>`).join('')}
+    ${back.length || opts.fromRelated || nav ? `
     <div class="detail-bar">
       ${back.length || opts.fromRelated
-        ? '<button class="btn nav-btn" data-act="back" aria-label="前の動画に戻る">‹</button>'
-        : nav ? `<button class="btn nav-btn" data-step="-1" aria-label="前の動画" ${nav.index > 0 ? '' : 'disabled'}>‹</button>` : ''}
-      <button class="btn primary play-main" disabled>確認中…</button>
-      <span data-role="fav"></span>
-      ${nav ? `<button class="btn nav-btn" data-step="1" aria-label="次の動画" ${nav.index < nav.list.length - 1 ? '' : 'disabled'}>›</button>` : ''}
-    </div>
+        ? '<button class="btn nav-btn wide" data-act="back" aria-label="前の動画に戻る">‹ 戻る</button>'
+        : `<button class="btn nav-btn wide" data-step="-1" aria-label="前の動画" ${nav.index > 0 ? '' : 'disabled'}>‹ 前へ</button>`}
+      <span class="detail-pos">${nav ? `${(nav.index + 1).toLocaleString()} / ${nav.list.length.toLocaleString()}` : ''}</span>
+      ${nav ? `<button class="btn nav-btn wide" data-step="1" aria-label="次の動画" ${nav.index < nav.list.length - 1 ? '' : 'disabled'}>次へ ›</button>` : '<span class="nav-spacer"></span>'}
+    </div>` : ''}
   `;
   const hero = el.querySelector('[data-role="hero"]');
   el.querySelector('[data-role="fav"]').appendChild(favButton(video));

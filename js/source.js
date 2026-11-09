@@ -5,11 +5,20 @@ import { state } from './data.js';
 import { wpGet } from './wp.js';
 import { safeUrl } from './matching.js';
 
-const CONTENT_VERSION = 3; // 取り出し方を変えたら上げる（古いキャッシュを取り直す）
+const CONTENT_VERSION = 4; // 取り出し方を変えたら上げる（古いキャッシュを取り直す）
 
 // URL は掲載元の投稿 URL を基準に解決し、http(s) 以外（javascript: など）は捨てる。
 // 遅延読み込みプラグインの data-src / data-lazy-src を優先する
 const srcOf = (el, base) => safeUrl(el.getAttribute('data-src') || el.getAttribute('data-lazy-src') || el.getAttribute('src'), base);
+
+// 説明文から除く段落: リンクだけでできた段落（ダウンロード先の一覧など）と、意味のない短い英字（linksv1 など）
+const JUNK_TEXT = /^(links?v?\d*|link\s*\|.*|download|streaming|mirror\s*\d*|[a-z]{1,12}\d*)$/i;
+function isLinkList(p) {
+  const links = p.querySelectorAll('a');
+  if (!links.length) return false;
+  const linkText = [...links].reduce((n, a) => n + a.textContent.trim().length, 0);
+  return p.textContent.trim().length - linkText < 6;
+}
 
 export function parseContent(html, base) {
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -18,9 +27,9 @@ export function parseContent(html, base) {
     .map((img) => srcOf(img, base))
     .filter((src) => src && !/emoji|gravatar|icon|logo|banner/i.test(src));
   const description = [...doc.querySelectorAll('p')]
-    .filter((p) => !p.querySelector('iframe'))
+    .filter((p) => !p.querySelector('iframe') && !isLinkList(p))
     .map((p) => p.textContent.trim())
-    .filter((t) => t.length > 1)
+    .filter((t) => t.length > 1 && !JUNK_TEXT.test(t))
     .join('\n\n');
   return { embeds, images: [...new Set(images)], description };
 }
