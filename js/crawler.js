@@ -51,7 +51,7 @@ async function resolveMedia(site, ids) {
   return map;
 }
 
-async function toPosts(site, raw) {
+async function toPosts(site, raw, { backfill }) {
   const [media] = await Promise.all([
     resolveMedia(site, raw.map((p) => p.featured_media)),
     resolveTerms(site, raw.flatMap((p) => p.tags || []), 'tags'),
@@ -69,6 +69,8 @@ async function toPosts(site, raw) {
       ...prev, // 詳細を開いたときに取った本文由来の情報（embeds など）を残す
       key, siteId: site.id, postId: p.id, link: p.link, title: clean, date: p.date,
       thumb: media[p.featured_media] || prev.thumb || null,
+      // 新着表示用。初回の全件取得で入った分は 0（NEW にしない）
+      seenAt: prev.key ? prev.seenAt || 0 : backfill ? 0 : Date.now(),
       code, group: groupKey(code, clean, key), studio: pickStudio(tags, cats),
       tags: [...new Set([...cats, ...tags])].filter((t) => !CODE_RE.test(t)),
     };
@@ -91,7 +93,7 @@ async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinit
     });
     total = totalPages;
     if (!data.length) break;
-    const rows = await toPosts(site, data);
+    const rows = await toPosts(site, data, { backfill: !!track });
     let known = 0;
     for (const p of rows) {
       if (state.posts.has(p.key)) known++; else crawl.added++;

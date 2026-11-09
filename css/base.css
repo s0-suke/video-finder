@@ -74,6 +74,7 @@ header {
   background: rgba(0,0,0,.72); color: #fff;
 }
 .badge.code { left: 6px; bottom: 6px; }
+.badge.new { left: 6px; top: 6px; background: var(--accent); letter-spacing: .04em; }
 .badge.fav { right: 6px; top: 6px; color: #ff6b8a; background: rgba(0,0,0,.6); }
 .card .title {
   margin-top: 6px; font-size: 13px; line-height: 1.35;
@@ -169,3 +170,15 @@ header {
 }
 #toast.on { opacity: 1; transform: translate(-50%, 0); }
 
+
+.chip .count { font-size: 11px; opacity: .75; margin-left: 2px; }
+
+/* 先頭へ戻る */
+#to-top {
+  position: fixed; right: 16px; bottom: calc(20px + var(--safe-bottom)); z-index: 15;
+  width: 44px; height: 44px; border-radius: 22px; border: 1px solid var(--border);
+  background: rgba(35,35,40,.92); color: var(--text); display: grid; place-items: center;
+  opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity .2s, transform .2s;
+}
+#to-top svg { width: 20px; height: 20px; }
+#to-top.on { opacity: 1; pointer-events: auto; transform: none; }

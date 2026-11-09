@@ -26,6 +26,10 @@ export const state = {
   studios: [], // { key, name, count }（本数の多い順）
 };
 
+// 収集で新しく見つかってから NEW 表示にしておく期間
+const NEW_MS = 3 * 24 * 60 * 60 * 1000;
+export const isNew = (v) => v.seenAt > Date.now() - NEW_MS;
+
 export const events = new EventTarget();
 export const emit = (type, detail) => events.dispatchEvent(new CustomEvent(type, { detail }));
 export const on = (type, fn) => events.addEventListener(type, (e) => fn(e.detail));
@@ -71,8 +75,10 @@ export function rebuild() {
       studioKey: sKey,
       tags,
       siteIds: new Set(rows.map((r) => r.siteId)),
+      // どこかのサイトで最初に見つかった時刻（初回の全件取得分は 0 = NEW にしない）
+      seenAt: rows.reduce((t, r) => Math.min(t, r.seenAt || 0), Infinity),
       sources: rows.map((r) => ({ ...r, siteName: siteName[r.siteId] || '?' })),
-      hay: [...rows.map((r) => r.title), main.code || '', studio || '', ...tags].join('\n').toLowerCase(),
+      hay: [...rows.map((r) => r.title), main.code || '', studio || '', ...tags].join('\n').normalize('NFKC').toLowerCase(),
     });
   }
   videos.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
