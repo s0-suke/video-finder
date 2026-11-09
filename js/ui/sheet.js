@@ -9,8 +9,10 @@ let onClose = null;
 
 export const isSheetOpen = () => sheet().classList.contains('open');
 
-export function openSheet(content, { onClose: cb } = {}) {
+// tall: 高さを一定（ほぼ全画面）にする。中身が変わってもボタンの位置が動かないように
+export function openSheet(content, { onClose: cb, tall = false } = {}) {
   const el = sheet();
+  el.classList.toggle('tall', tall);
   if (onClose) onClose();
   onClose = cb || null;
   el.innerHTML = '<div class="grabber"></div>';

@@ -162,9 +162,6 @@ header {
 @keyframes slide { from { left: -30%; } to { left: 100%; } }
 
 /* 詳細シート */
-.detail-actions { display: flex; gap: 8px; margin-top: 12px; }
-.detail-actions .play-main { flex: 1; justify-content: center; height: 44px; font-size: 15px; font-weight: 600; }
-.detail-actions .btn { height: 44px; }
 .kv { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
 .link { background: none; border: 0; padding: 0; color: var(--accent); font-size: 13px; }
 .chip.more { color: var(--accent); }
@@ -256,10 +253,6 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 /* トーストはドックの上に出す */
 #toast { bottom: calc(var(--dock-h) + var(--safe-bottom) + 12px); }
 
-/* 詳細シートの前後移動 */
-.detail-nav { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
-.detail-nav .link { font-size: 13px; padding: 4px 0; }
-.detail-nav .link:disabled { color: var(--border); }
 
 /* 機能のオン/オフ */
 .feature-row { height: auto; min-height: 48px; gap: 12px; padding: 4px 0; }
@@ -272,3 +265,19 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 .picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 12px 4px; text-align: left; font-size: 15px; }
 .picker-row.on { color: var(--accent); font-weight: 600; }
 .picker-n { color: var(--muted); font-size: 12px; }
+
+/* ---- 詳細シート: 高さ一定・下端に操作バー ---- */
+.sheet.tall { height: 92vh; padding-bottom: 0; }
+.detail-pos { font-size: 11px; color: var(--muted); text-align: right; margin: 6px 0 -6px; }
+.detail .hero .ph { display: grid; place-items: center; height: 100%; padding: 12px; text-align: center; background: linear-gradient(135deg, #2a2540, #1c1c22); color: var(--muted); font-size: 15px; font-weight: 600; }
+.detail-bar {
+  position: sticky; bottom: 0; z-index: 3; display: flex; gap: 8px; align-items: center;
+  margin: 18px -16px 0; padding: 10px 16px calc(10px + var(--safe-bottom));
+  background: rgba(24,24,27,.96); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-top: 1px solid var(--border);
+}
+.detail-bar .btn { height: 48px; }
+.detail-bar .play-main { flex: 1; justify-content: center; font-size: 16px; font-weight: 600; text-decoration: none; }
+.detail-bar .play-main:disabled { background: var(--surface-2); border-color: var(--border); color: var(--muted); opacity: 1; }
+.detail-bar .nav-btn { width: 48px; padding: 0; justify-content: center; font-size: 26px; line-height: 1; }
+.detail-bar .nav-btn:disabled { opacity: .3; }

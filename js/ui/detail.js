@@ -4,6 +4,9 @@
 //   - 再生:        player.js の mountPlayer(container, embedUrl)
 //   - お気に入り:  favorites.js の favButton(video)
 //   - 詳細情報:    details.js の mountDetails(container, video, { onTag, onStudio })
+//
+// 片手で使えるよう、操作（‹ 前 / ▶ 再生 / ♡ / 次 ›）はシートの下端に固定したバーに置く。
+// シートの高さは一定にして、動画を切り替えてもボタンの位置が動かないようにする。
 
 import { esc, fmtDate } from '../util.js';
 import { state, on } from '../data.js';
@@ -26,11 +29,20 @@ on('release', (key) => {
   if (rel) rel.textContent = `発売 ${fmtDate(shown.video.release)}`;
 });
 
+// 前後の動画へ移るための並び（一覧から開いたときだけ）と、関連動画から開いたときに戻るための積み重ね
+let nav = null; // { list, index }
+let back = []; // [{ video, nav }]
+
 function go(step) {
   if (!nav) return;
   const i = nav.index + step;
   if (i < 0 || i >= nav.list.length) return;
   openDetail(nav.list[i], { list: nav.list, index: i });
+}
+
+function goBack() {
+  const prev = back.pop();
+  if (prev) openDetail(prev.video, { ...(prev.nav || {}), keepBack: true });
 }
 
 // 同じスタジオの動画（新しい順。自分自身は除く）
@@ -54,21 +66,20 @@ function relatedHTML(video) {
     </div>`;
 }
 
-// 左右スワイプで前後の動画へ移るための並び（一覧から開いたときだけ）
-let nav = null; // { list, index }
-
-// opts.list / opts.index を渡すと、その並びで前後の動画へスワイプで移れる
+// opts.list / opts.index を渡すと、その並びで前後の動画へ移れる。
+// opts.keepBack は「戻る」で開いたとき（戻り先の積み重ねを消さない）
 export function openDetail(video, opts = {}) {
   if (!video) return;
   nav = opts.list && feature('swipeNav') ? { list: opts.list, index: opts.index } : null;
+  if (!opts.keepBack && !opts.fromRelated) back = [];
+
   const el = document.createElement('div');
   el.className = 'detail';
   el.innerHTML = `
-    <div class="hero" data-role="hero">${video.thumb ? `<img src="${esc(video.thumb)}" referrerpolicy="no-referrer" alt="">` : ''}</div>
-    <div class="detail-actions">
-      <button class="btn primary play-main" disabled>プレイヤー確認中…</button>
-      <span data-role="fav"></span>
-    </div>
+    <div class="hero" data-role="hero">${video.thumb
+      ? `<img src="${esc(video.thumb)}" referrerpolicy="no-referrer" alt="">`
+      : `<div class="ph">${esc(video.studio || video.title.slice(0, 16))}</div>`}</div>
+    ${nav ? `<div class="detail-pos">${(nav.index + 1).toLocaleString()} / ${nav.list.length.toLocaleString()}</div>` : ''}
     <h2>${esc(video.title)}</h2>
     <div class="kv">
       ${video.code ? `<span>${esc(video.code)}</span>` : ''}
@@ -85,9 +96,17 @@ export function openDetail(video, opts = {}) {
         <div class="head"><span class="name">${esc(s.siteName)}</span></div>
         <div class="btn-row">
           <span class="embeds" data-key="${esc(s.key)}"></span>
-          <a class="btn" href="${esc(s.link)}" target="_blank" rel="noopener noreferrer">サイトで開く ↗</a>
+          ${s.link ? `<a class="btn" href="${esc(s.link)}" target="_blank" rel="noopener noreferrer">サイトで開く ↗</a>` : ''}
         </div>
       </div>`).join('')}
+    <div class="detail-bar">
+      ${back.length || opts.fromRelated
+        ? '<button class="btn nav-btn" data-act="back" aria-label="前の動画に戻る">‹</button>'
+        : `<button class="btn nav-btn" data-step="-1" aria-label="前の動画" ${nav && nav.index > 0 ? '' : 'disabled'}>‹</button>`}
+      <button class="btn primary play-main" disabled>確認中…</button>
+      <span data-role="fav"></span>
+      <button class="btn nav-btn" data-step="1" aria-label="次の動画" ${nav && nav.index < nav.list.length - 1 ? '' : 'disabled'}>›</button>
+    </div>
   `;
   const hero = el.querySelector('[data-role="hero"]');
   el.querySelector('[data-role="fav"]').appendChild(favButton(video));
@@ -96,10 +115,12 @@ export function openDetail(video, opts = {}) {
     onStudio: (key) => { closeSheet(); setStudio(key); },
   });
 
+  const main = el.querySelector('.play-main');
   const play = (url) => {
     mountPlayer(hero, url);
     el.closest('.sheet').scrollTo({ top: 0, behavior: 'smooth' });
     recordView(video);
+    main.textContent = '↻ 読み込み直す';
   };
 
   el.addEventListener('click', (e) => {
@@ -110,24 +131,20 @@ export function openDetail(video, opts = {}) {
     const em = e.target.closest('[data-embed]');
     if (em) return play(em.dataset.embed);
     const rel = e.target.closest('[data-related]');
-    if (rel) openDetail(state.byKey.get(rel.dataset.related), nav || {}); // 元の一覧での位置を保ったまま
+    if (rel) {
+      // 関連動画へ移る。‹ で今の動画に戻れるよう積んでおく
+      back.push({ video, nav });
+      return openDetail(state.byKey.get(rel.dataset.related), { fromRelated: true });
+    }
+    if (e.target.closest('[data-act="back"]')) return goBack();
     const step = e.target.closest('[data-step]');
     if (step) go(+step.dataset.step);
   });
 
-  // 前後の動画への移動（スワイプか、見出し横の ‹ › ボタン）
-  if (nav) {
-    const pos = document.createElement('div');
-    pos.className = 'detail-nav';
-    pos.innerHTML = `<button class="link" data-step="-1" ${nav.index > 0 ? '' : 'disabled'} aria-label="前の動画">‹ 前へ</button>
-      <span>${(nav.index + 1).toLocaleString()} / ${nav.list.length.toLocaleString()}</span>
-      <button class="link" data-step="1" ${nav.index < nav.list.length - 1 ? '' : 'disabled'} aria-label="次の動画">次へ ›</button>`;
-    el.prepend(pos);
-  }
+  // 左右スワイプで前後の動画へ（横スクロールする部品の上では使わない）
   let sx = null, sy = 0;
   el.addEventListener('touchstart', (e) => {
-    // 横スクロールする部品（カルーセル・関連動画・タグ・プレイヤー）の上では使わない
-    sx = e.target.closest('.dt-carousel, .related, .tags, .hero iframe, .dt-root [class*="gallery"]') ? null : e.touches[0].clientX;
+    sx = e.target.closest('.dt-carousel, .related, .tags, .hero iframe, .detail-bar, .dt-root [class*="gallery"]') ? null : e.touches[0].clientX;
     sy = e.touches[0].clientY;
   }, { passive: true });
   el.addEventListener('touchend', (e) => {
@@ -137,12 +154,10 @@ export function openDetail(video, opts = {}) {
     sx = null;
   });
 
-  openSheet(el);
-
+  openSheet(el, { tall: true });
   shown = { video, el };
 
   // 各掲載サイトの本文からプレイヤーを取り出す。最初に見つかったものを大きな再生ボタンに割り当てる
-  const main = el.querySelector('.play-main');
   let mainUrl = null;
   const jobs = video.sources.map((s) => {
     const slot = el.querySelector(`.embeds[data-key="${CSS.escape(s.key)}"]`);
@@ -158,7 +173,17 @@ export function openDetail(video, opts = {}) {
       })
       .catch(() => { slot.innerHTML = '<span class="note">プレイヤーを取得できません</span>'; });
   });
+  // 再生できるプレイヤーがなければ、大きなボタンを「サイトで開く」にする
   Promise.allSettled(jobs).then(() => {
-    if (!mainUrl) { main.textContent = '再生できるプレイヤーがありません'; }
+    if (mainUrl || !main.isConnected) return;
+    const link = video.sources.map((s) => s.link).find(Boolean);
+    if (!link) { main.textContent = '再生できません'; return; }
+    const a = document.createElement('a');
+    a.className = 'btn primary play-main';
+    a.href = link;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = 'サイトで開く ↗';
+    main.replaceWith(a);
   });
 }

@@ -113,7 +113,7 @@ function render(container, url, blocked) {
     const host = hostOf(url);
     refused.add(host);
     await db.kvSet(KV_REFUSED, [...refused]);
-    toast('この提供元は広告ブロックに対応していないため、ブロックなしで開きました。広告のタブが開いたら閉じて戻ってください');
+    toast('広告ブロック非対応のため、ブロックなしで開きました');
     render(container, url, false);
   });
 }
