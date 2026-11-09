@@ -304,3 +304,10 @@ details.more[open] summary { margin-bottom: 4px; }
   .detail-bar { position: static; }
 }
 .cond { height: 32px; padding: 0 12px; border-radius: 16px; }
+
+/* バージョン情報 */
+.version-now { font-size: 15px; margin-bottom: 4px; }
+.version-entry { margin: 10px 0 0; }
+.version-head { display: flex; gap: 8px; align-items: baseline; }
+.version-entry ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--text); }
+.version-entry li { margin: 2px 0; }

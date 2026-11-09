@@ -11,6 +11,7 @@ import * as history from './history.js';
 import { initRelease, collectRelease } from './release.js';
 import * as features from './features.js';
 import { feature } from './features.js';
+import * as version from './version.js';
 import { initSheet, hide as hideSheet } from './ui/sheet.js';
 import { initList, render, renderChips, saveFilters, dropStaleFilters } from './ui/list.js';
 import { openFilters } from './ui/filters.js';
@@ -49,6 +50,7 @@ async function boot() {
   features.init();
   await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease()]);
 
+  version.init();
   initSheet();
   initList();
   initSettings();
