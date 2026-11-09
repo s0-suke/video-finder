@@ -95,3 +95,48 @@ export function releaseTitleKey(title) {
   const key = normalizeTitle(t);
   return key.length >= 10 ? key : null;
 }
+
+// 発売日として使えるか: 掲載元のどこかに投稿された日（earliestPost）の 2 日後より遅い日付はありえない
+// （再販・再掲載の日付や、別作品との取り違え）ので使わない
+export function plausibleRelease(date, earliestPost) {
+  if (!date) return false;
+  if (!earliestPost) return true;
+  return Date.parse(date.slice(0, 10)) <= Date.parse(earliestPost.slice(0, 10)) + 2 * 24 * 60 * 60 * 1000;
+}
+
+// ---- 公式の配信日（CK DOWNLOAD: COAT グループの公式配信サイト。CORS 可）----
+
+// COAT グループの作品とみなすスタジオ・タグ（studioKey の形）
+const CK_STUDIOS = new Set(['ckdownload', 'ck', 'coat', 'coatwest']);
+// CK DOWNLOAD のプロダクトナンバーの形（CO-GF00025 / ORWESS127 / COCO351-05 / ANO-00184 など）
+const CK_TOKEN = /^[A-Z]{2,8}-?[A-Z]{0,4}\d{2,6}(?:-\d{2})?$/i;
+const CK_LEAD = /^\s*([A-Z]{2,8}-?[A-Z]{0,4}\d{2,6}(?:-\d{2})?)\s*[–\-:：]\s/i;
+
+// CK DOWNLOAD で検索する品番の候補（COAT グループの作品でなければ空）。
+// 検索は表記どおりの部分一致なので、掲載元の表記（タイトル先頭・タグ）→ 抽出した品番 の順に、最大 2 つ
+export function ckCodes({ code, studio, tags = [], titles = [] }) {
+  if (![studio, ...tags].some((t) => t && CK_STUDIOS.has(studioKey(t)))) return [];
+  const out = [];
+  const add = (c) => {
+    if (!c) return;
+    const u = c.trim().toUpperCase();
+    if (CK_TOKEN.test(u) && !NOT_CODE.test(u) && !out.includes(u)) out.push(u);
+  };
+  for (const t of titles) add((t || '').match(CK_LEAD)?.[1]);
+  add(code);
+  for (const t of tags) add(t);
+  return out.slice(0, 2);
+}
+
+// CK DOWNLOAD の検索結果ページ（/product/result?kw=…）から、件数と作品（id・タイトル・配信日）を取り出す。
+// スマホ（iPhone）からはスマホ版（/sp/product/detail/…、タイトルが h3）が返るので、両方に対応する
+export function parseCkResult(html) {
+  const total = html.match(/<strong>([\d,]+)<\/strong>\s*件/);
+  const list = html.match(/<ul class="title_list">([\s\S]*?)<\/ul>/);
+  const items = [];
+  if (list) {
+    const re = /<a href="(?:\/sp)?\/product\/detail\/(\d+)">[\s\S]*?<h[34]>([\s\S]*?)<\/h[34]>[\s\S]*?<div class="date">(\d{4})\.(\d{2})\.(\d{2})<\/div>/g;
+    for (const m of list[1].matchAll(re)) items.push({ id: m[1], title: m[2].trim(), date: `${m[3]}-${m[4]}-${m[5]}` });
+  }
+  return { total: total ? Number(total[1].replace(/,/g, '')) : null, items };
+}

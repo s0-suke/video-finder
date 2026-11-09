@@ -108,3 +108,34 @@ test('Summer-2024 / Tokyo-2023 のような語+年は品番にしない（GT-192
   assert.equal(extractCode('Tokyo-2023 night'), null);
   assert.equal(extractCode('GT-1925 タイトル'), 'GT-1925');
 });
+
+import { ckCodes, parseCkResult, plausibleRelease } from '../js/matching.js';
+
+test('CK DOWNLOAD で検索する品番: COAT グループの作品だけ、掲載元の表記 → 抽出した品番の順', () => {
+  assert.deepEqual(ckCodes({ code: null, studio: 'CK DOWNLOAD', titles: ['COCO351-05 – 「COATオリジナル」全身ツル肌'] }), ['COCO351-05']);
+  assert.deepEqual(ckCodes({ code: 'CO-ME00055', studio: null, tags: ['CK'], titles: ['No.055 純朴野球部'] }), ['CO-ME00055']);
+  assert.deepEqual(ckCodes({ code: null, studio: 'COAT WEST', tags: ['ORWEMA091', 'ノンケ'], titles: ['[maniac オリジナル]No.091'] }), ['ORWEMA091']);
+  assert.deepEqual(ckCodes({ code: 'MR-KR2387', studio: "Men's Rush.TV", titles: ['MR-KR2387 – タイトル'] }), [], 'COAT 以外は調べない');
+  assert.deepEqual(ckCodes({ code: null, studio: 'COAT', tags: ['Part-02'], titles: ['タイトル'] }), [], '一般語は品番にしない');
+});
+
+test('CK DOWNLOAD の検索結果から件数と配信日を取り出す', () => {
+  const html = `<p><strong>1</strong>件</p><ul class="title_list"><li><a href="/product/detail/33289">
+    <div class="status"><span>CKオリ</span></div><h4>[激撮フィッティングルーム]No.020 営業マン</h4>
+    <div class="ftData"><div class="date">2026.11.05</div></div></a></li></ul>
+    <ul class="other"><li><div class="date">2020.01.01</div></li></ul>`;
+  assert.deepEqual(parseCkResult(html), { total: 1, items: [{ id: '33289', title: '[激撮フィッティングルーム]No.020 営業マン', date: '2026-11-05' }] });
+  assert.deepEqual(parseCkResult('<p><strong>25,311</strong>件</p>'), { total: 25311, items: [] });
+  // スマホ版
+  const sp = `<ul class="title_list"><li><a href="/sp/product/detail/34600"><h3>[激撮フィッティングルーム]No.025</h3>
+    <div class="ftData"><div class="date">2026.11.03</div><div class="price"><strong>2,180</strong>円</div></div></a></li></ul>`;
+  assert.deepEqual(parseCkResult(sp), { total: null, items: [{ id: '34600', title: '[激撮フィッティングルーム]No.025', date: '2026-11-03' }] });
+});
+
+test('掲載元の最初の投稿日より 2 日を超えて遅い発売日は使わない（再販の日付など）', () => {
+  assert.equal(plausibleRelease('2026-11-01', '2026-11-03T10:00:00'), true);
+  assert.equal(plausibleRelease('2026-11-05', '2026-11-03T10:00:00'), true);
+  assert.equal(plausibleRelease('2026-11-06', '2026-11-03T10:00:00'), false);
+  assert.equal(plausibleRelease('2026-11-06', ''), true);
+  assert.equal(plausibleRelease('', '2026-11-03'), false);
+});
