@@ -654,17 +654,21 @@ function openLightbox(urls, start, onClose) {
     track.scrollTo({ left: to * track.clientWidth, behavior: 'smooth' });
   };
 
+  // 開いたら履歴を 1 つ積む。戻る操作では拡大表示だけを閉じ、詳細シートは残す
+  history.pushState({ sheet: true, lightbox: true }, '');
   let closed = false;
-  const close = () => {
+  const finish = () => {
     if (closed) return;
     closed = true;
-    removeEventListener('popstate', close);
+    removeEventListener('popstate', onPop);
     box.classList.remove('open');
     if (onClose) onClose(index());
     setTimeout(() => box.remove(), 200);
   };
-  // 戻る操作でシートごと閉じたときも一緒に消す
-  addEventListener('popstate', close);
+  const onPop = () => { if (!(history.state && history.state.lightbox)) finish(); };
+  // ✕・下スワイプ・外側のタップで閉じるときは履歴を戻す（popstate で finish される）
+  const close = () => { if (closed) return; if (history.state && history.state.lightbox) history.back(); else finish(); };
+  addEventListener('popstate', onPop);
 
   // 下スワイプで閉じる（指に合わせて画像を下げ、背景を薄くする。足りなければ元に戻す）
   // 横の動きは track のスクロール（touch-action: pan-x）に任せ、縦の動きだけここで扱う
@@ -675,6 +679,7 @@ function openLightbox(urls, start, onClose) {
     box.style.setProperty('--dt-lb-fade', String(Math.max(0, 1 - dy / 400)));
   };
   box.addEventListener('pointerdown', (e) => {
+    if (!e.isPrimary) { drag = null; box.classList.remove('dragging'); setDrag(0); return; } // 2 本目の指（ピンチ）
     if (closed || e.button > 0 || e.target.closest('button')) return;
     drag = { id: e.pointerId, x: e.clientX, y: e.clientY, dy: 0, vertical: null };
   });

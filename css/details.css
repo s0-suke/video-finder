@@ -72,7 +72,7 @@
 .dt-lightbox.open { opacity: 1; }
 .dt-lb-track {
   display: flex; height: 100%; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
-  overscroll-behavior: contain; touch-action: pan-x; transition: transform .2s;
+  overscroll-behavior: contain; touch-action: pan-x pinch-zoom; transition: transform .2s;
 }
 .dt-lightbox.dragging .dt-lb-track { transition: none; }
 .dt-lb-track::-webkit-scrollbar { display: none; }

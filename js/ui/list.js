@@ -6,8 +6,7 @@
 import { $, esc, fmtDate, toast } from '../util.js';
 
 // カード用の短い日付（今年なら「11/04」、それ以外は「2021/05/23」）
-const thisYear = String(new Date().getFullYear());
-const shortDate = (d) => (d && d.startsWith(thisYear) ? d.slice(5, 10).replace('-', '/') : fmtDate(d));
+const shortDate = (d) => (d && d.startsWith(String(new Date().getFullYear())) ? d.slice(5, 10).replace('-', '/') : fmtDate(d));
 import { state, on, isNew } from '../data.js';
 import { crawl, collect } from '../crawler.js';
 import { isFav, favAddedAt, toggleFav } from '../favorites.js';
@@ -111,7 +110,7 @@ export function render(reset = true) {
   renderMeta();
   $('#list-state').innerHTML = filtered.length
     ? ''
-    : activeConditions().length ? '該当する動画がありません<div class="btn-row" style="justify-content:center"><button class="btn" data-clear="all">すべての条件を外す</button></div>'
+    : activeConditions().some((c) => !c.order) ? '該当する動画がありません<div class="btn-row" style="justify-content:center"><button class="btn" data-clear="all">すべての条件を外す</button></div>'
     : (!filters.q && !filters.studio && EMPTY[filters.view]) ? EMPTY[filters.view]
     : state.posts.size ? '該当する動画がありません'
     : crawl.running ? '収集中です。少し待つと表示されます…'
@@ -150,9 +149,11 @@ const VIEW_LABEL = { '': '', new: '新着', fav: 'お気に入り', history: '�
 function activeConditions() {
   const c = [];
   if (filters.q) c.push({ id: 'q', label: `“${filters.q}”` });
-  if (filters.dateBy === 'release') c.push({ id: 'dateBy', label: '発売日順' });
-  if (filters.sort === 'old') c.push({ id: 'sort', label: '古い順' });
-  if (filters.sort === 'random') c.push({ id: 'sort', label: 'ランダム' });
+  // 並び順はお気に入り・履歴では効かない（追加順・視聴順で並ぶ）ので出さない
+  const sorted = filters.view !== 'fav' && filters.view !== 'history';
+  if (sorted && filters.dateBy === 'release') c.push({ id: 'dateBy', label: '発売日順', order: true });
+  if (sorted && filters.sort === 'old') c.push({ id: 'sort', label: '古い順', order: true });
+  if (sorted && filters.sort === 'random') c.push({ id: 'sort', label: 'ランダム', order: true });
   if (filters.site) c.push({ id: 'site', label: state.sites.find((s) => String(s.id) === String(filters.site))?.name || 'サイト' });
   if (filters.hideNoThumb) c.push({ id: 'hideNoThumb', label: 'サムネなし除外' });
   if (filters.studio) c.push({ id: 'studio', label: state.studios.find((x) => x.key === filters.studio)?.name || 'スタジオ' });
@@ -191,7 +192,10 @@ function rememberQuery(q) {
   if (!feature('recentSearch')) return;
   q = q.trim();
   if (q.length < 2) return;
-  saveRecent([q, ...loadRecent().filter((x) => x !== q)]);
+  // 続けて打った語（「マッチョ」→「マッチョ 筋肉」）は、先頭の途中の語を置き換える
+  const [head, ...rest] = loadRecent();
+  const list = head && q.startsWith(head) ? rest : [head, ...rest].filter(Boolean);
+  saveRecent([q, ...list.filter((x) => x !== q)]);
 }
 
 function renderSuggest() {
@@ -222,7 +226,10 @@ export function initList() {
   new IntersectionObserver((e) => { if (e[0].isIntersecting && shown < filtered.length) render(false); }, { rootMargin: '800px' })
     .observe($('#sentinel'));
 
-  let qTimer, rememberTimer;
+  let qTimer, rememberTimer, composing = false;
+  // 日本語入力の変換中は最近の検索に残さない
+  $('#q').addEventListener('compositionstart', () => { composing = true; });
+  $('#q').addEventListener('compositionend', () => { composing = false; });
   $('#q').value = filters.q;
   $('#q-clear').style.display = filters.q ? 'block' : 'none';
   $('#q').addEventListener('input', () => {
@@ -234,7 +241,7 @@ export function initList() {
       render();
       // 入力が止まって 2 秒たち、結果があれば最近の検索に残す
       clearTimeout(rememberTimer);
-      rememberTimer = setTimeout(() => { if (filtered.length) rememberQuery(filters.q); }, 2000);
+      rememberTimer = setTimeout(() => { if (filtered.length && !composing) rememberQuery(filters.q); }, 2000);
     }, 250);
   });
   $('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#q').blur(); });

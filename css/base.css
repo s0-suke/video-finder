@@ -296,3 +296,13 @@ details.more { margin-top: 4px; }
 details.more summary { font-size: 12px; color: var(--accent); cursor: pointer; list-style: none; }
 details.more summary::-webkit-details-marker { display: none; }
 details.more[open] summary { margin-bottom: 4px; }
+
+/* 中身が短くても操作バーをシートの下端に置く（sticky は中身がはみ出したときだけ効くため） */
+.sheet.tall { display: flex; flex-direction: column; }
+.sheet.tall > .detail { flex: 1 0 auto; display: flex; flex-direction: column; }
+.sheet.tall > .detail > .detail-bar { margin-top: auto; }
+/* 横向きの iPhone では、バーを固定せずプレイヤーの操作部に重ねない */
+@media (orientation: landscape) and (max-height: 500px) {
+  .detail-bar { position: static; }
+}
+.cond { height: 32px; padding: 0 12px; border-radius: 16px; }

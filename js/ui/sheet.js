@@ -45,7 +45,8 @@ export function closeSheet() {
 }
 
 export function initSheet() {
-  addEventListener('popstate', hide);
+  // 戻った先がまだシートの中（拡大表示などを閉じただけ）なら閉じない
+  addEventListener('popstate', () => { if (!(history.state && history.state.sheet)) hide(); });
   $('#backdrop').onclick = closeSheet;
   // 下スワイプで閉じる
   let startY = null;

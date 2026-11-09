@@ -102,10 +102,10 @@ export function openDetail(video, opts = {}) {
     <div class="detail-bar">
       ${back.length || opts.fromRelated
         ? '<button class="btn nav-btn" data-act="back" aria-label="前の動画に戻る">‹</button>'
-        : `<button class="btn nav-btn" data-step="-1" aria-label="前の動画" ${nav && nav.index > 0 ? '' : 'disabled'}>‹</button>`}
+        : nav ? `<button class="btn nav-btn" data-step="-1" aria-label="前の動画" ${nav.index > 0 ? '' : 'disabled'}>‹</button>` : ''}
       <button class="btn primary play-main" disabled>確認中…</button>
       <span data-role="fav"></span>
-      <button class="btn nav-btn" data-step="1" aria-label="次の動画" ${nav && nav.index < nav.list.length - 1 ? '' : 'disabled'}>›</button>
+      ${nav ? `<button class="btn nav-btn" data-step="1" aria-label="次の動画" ${nav.index < nav.list.length - 1 ? '' : 'disabled'}>›</button>` : ''}
     </div>
   `;
   const hero = el.querySelector('[data-role="hero"]');
@@ -121,6 +121,7 @@ export function openDetail(video, opts = {}) {
     el.closest('.sheet').scrollTo({ top: 0, behavior: 'smooth' });
     recordView(video);
     main.textContent = '↻ 読み込み直す';
+    main.dataset.embed = url; // 今見ているプレイヤーを読み込み直す
   };
 
   el.addEventListener('click', (e) => {
@@ -132,9 +133,11 @@ export function openDetail(video, opts = {}) {
     if (em) return play(em.dataset.embed);
     const rel = e.target.closest('[data-related]');
     if (rel) {
-      // 関連動画へ移る。‹ で今の動画に戻れるよう積んでおく
+      // 関連動画へ移る。‹ で今の動画に戻れるよう積んでおく（開く先がなければ積まない）
+      const next = state.byKey.get(rel.dataset.related);
+      if (!next) return;
       back.push({ video, nav });
-      return openDetail(state.byKey.get(rel.dataset.related), { fromRelated: true });
+      return openDetail(next, { fromRelated: true });
     }
     if (e.target.closest('[data-act="back"]')) return goBack();
     const step = e.target.closest('[data-step]');
