@@ -29,6 +29,7 @@ const SHELL = [
   './js/release.js',
   './js/features.js',
   './js/version.js',
+  './js/selftest.js',
   './js/ui/sheet.js',
   './js/ui/list.js',
   './js/ui/detail.js',

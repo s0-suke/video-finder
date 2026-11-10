@@ -13,7 +13,6 @@ const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, [
 
 export const DEFAULT_SITES = [
   'https://gayvidsclub.com/',
-  'https://igay69.com/',
   'https://poapan.xyz/',
   'https://javboys.com/',
 ];

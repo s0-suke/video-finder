@@ -33,7 +33,7 @@ export function openFilters() {
         ${enabled.map((s) => `<option value="${s.id}" ${String(filters.site) === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
       </select>
     </div>
-    <div class="field switch"><span>サムネイルのない動画を隠す<span class="note" style="display:block;font-size:11px">igay69 だけに載っている動画など（再生もできないことが多い）</span></span>
+    <div class="field switch"><span>サムネイルのない動画を隠す<span class="note" style="display:block;font-size:11px">掲載元に画像がない動画（再生もできないことが多い）</span></span>
       <button class="toggle ${filters.hideNoThumb ? 'on' : ''}" id="f-nothumb" aria-label="切り替え"></button>
     </div>
     <div class="btn-row">

@@ -98,4 +98,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').ca
 // ホーム画面に追加したアプリのデータを iOS が勝手に消さないよう、永続化をお願いする
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
-boot();
+boot().then(() => {
+  // ?selftest: 画面の自動テスト（開発用）
+  if (new URLSearchParams(location.search).has('selftest')) import('./selftest.js').then((m) => m.runSelftest());
+});
