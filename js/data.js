@@ -7,6 +7,7 @@
 
 import * as db from './db.js';
 import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode, releaseTitleKey, plausibleRelease, stripCode, safeUrl } from './matching.js';
+import { buildEstimateIndex, estimateRelease } from './release-estimate.js';
 
 // 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
 const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
@@ -30,10 +31,13 @@ export const state = {
 };
 
 // 発売日の出どころ（video.releaseSrc）
-//   'official' 公式の配信日（CK DOWNLOAD） / 'otokoki' otokoki の掲載日（目安） / '' 不明
+//   'official' 公式の配信日（CK DOWNLOAD） / 'otokoki' otokoki の掲載日（目安）
+//   'estimate' 同じレーベルの前後の品番の発売日からの推定（release-estimate.js。video.releaseEst に根拠） / '' 不明
 // 公式 → otokoki（品番 → タイトルの順）の順に探す。掲載元の最初の投稿日より遅い日付は使わない（matching.js の plausibleRelease）
+const firstPosted = (rows) => rows.reduce((d, r) => (r.date && (!d || r.date < d) ? r.date : d), '');
+
 function releaseOf(key, code, rows) {
-  const first = rows.reduce((d, r) => (r.date && (!d || r.date < d) ? r.date : d), '');
+  const first = firstPosted(rows);
   const ok = (d) => plausibleRelease(d, first);
   const off = state.release.official.get('key:' + key) || (code && state.release.official.get('code:' + normalizeCode(code)));
   if (ok(off)) return { date: off, src: 'official' };
@@ -49,14 +53,31 @@ function releaseOf(key, code, rows) {
   return null;
 }
 
+// 既知の発売日（公式・otokoki）から作った、品番の接頭辞ごとの点列（rebuild のたびに作り直す）
+let estimateIndex = new Map();
+
+// 既知の発売日がない動画の推定（品番があり、前後の既知の品番に挟まれるときだけ。掲載元の最初の投稿日より遅ければ使わない）
+function estimateOf(code, rows) {
+  if (!code) return null;
+  const e = estimateRelease(estimateIndex, code);
+  return e && plausibleRelease(e.date, firstPosted(rows)) ? e : null;
+}
+
 const releaseFields = (key, code, rows) => {
   const r = releaseOf(key, code, rows);
-  return { release: r ? r.date : '', releaseKnown: !!r, releaseSrc: r ? r.src : '' };
+  return { release: r ? r.date : '', releaseKnown: !!r, releaseSrc: r ? r.src : '', releaseEst: null };
 };
 
-// 発売日の対応表が増えたときに、一覧を作り直さずに 1 本だけ発売日を付け直す（release.js から使う）
+const estimateFields = (code, rows) => {
+  const e = estimateOf(code, rows);
+  return e ? { release: e.date, releaseSrc: 'estimate', releaseEst: { from: e.from, to: e.to } } : null;
+};
+
+// 発売日の対応表が増えたときに、一覧を作り直さずに 1 本だけ発売日を付け直す（release.js から使う）。
+// 既知の日付がなければ、前回の rebuild の点列で推定する（点列への反映は次の rebuild）
 export function applyRelease(video) {
   Object.assign(video, releaseFields(video.key, video.code, video.sources));
+  if (!video.releaseKnown) Object.assign(video, estimateFields(video.code, video.sources));
 }
 
 // 収集で新しく見つかってから NEW 表示にしておく期間
@@ -152,7 +173,7 @@ export function rebuild() {
       title: displayTitle(main.title, main.code), // 保存済みのタイトルに品番が残っていても表示では外す
       thumb: main.thumb,
       date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
-      // 発売日（公式の配信日 → otokoki の掲載日の順）と出どころ。照合できなければ空（不明）。掲載日では代用しない
+      // 発売日（公式の配信日 → otokoki の掲載日の順）と出どころ。照合できなければ空（下で推定する）。掲載日では代用しない
       ...releaseFields(key, main.code, rows),
       studio,
       studioKey: sKey,
@@ -166,6 +187,10 @@ export function rebuild() {
     });
   }
   videos.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  // 発売日が分からない動画は、同じレーベルの前後の品番の既知の発売日から推定する（推定どうしを根拠にはしない）
+  estimateIndex = buildEstimateIndex(videos.filter((v) => v.releaseKnown && v.code).map((v) => ({ code: v.code, date: v.release })));
+  for (const v of videos) if (!v.releaseKnown) Object.assign(v, estimateFields(v.code, v.sources));
 
   const studios = [...studioNames].map(([key, names]) => {
     const [name] = [...names].sort((a, b) => b[1] - a[1])[0];

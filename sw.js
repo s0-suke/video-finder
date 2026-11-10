@@ -30,6 +30,7 @@ const SHELL = [
   './js/details/lightbox.js',
   './js/history.js',
   './js/release.js',
+  './js/release-estimate.js',
   './js/features.js',
   './js/version.js',
   './js/selftest.js',

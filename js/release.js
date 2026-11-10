@@ -10,7 +10,9 @@
 //      記事のタイトルと日付だけを全件（約 4.4 万件、タイトルのみなので数 MB）取り、
 //      品番 → 日付 / 正規化したタイトル → 日付 の対応表を作る。
 //      詳細を開いて記事が見つかれば noteRelease で記録する。
-// 照合できない動画は発売日不明（掲載日では代用しない）。
+//   3. 推定（'estimate'）… 上の 1・2 で分からない動画は、同じレーベルの前後の品番の発売日から推定する
+//      （release-estimate.js。data.js の rebuild で付ける。video.releaseEst に根拠の前後の品番）。
+// どれでも分からない動画は発売日不明（掲載日では代用しない）。
 //
 // otokoki の収集は crawler.js と同じく、新着側から差分 → 初回の全件取得（途中で止めても続きから）の順。
 
@@ -20,6 +22,7 @@ import { wpGet } from './wp.js';
 import { sleep, decodeEntities, esc, fmtDate } from './util.js';
 import { releaseCode, releaseTitleKey, normalizeCode, ckCodes, parseCkResult } from './matching.js';
 import { registerSettingsSection } from './ui/settings.js';
+import { ESTIMATE } from './release-estimate.js';
 
 const OTOKOKI = 'https://otokoki.net/';
 const PER_PAGE = 100;
@@ -49,6 +52,13 @@ export async function initRelease() {
 export function releaseLabel(video) {
   if (!video.release) return { text: '発売日不明', title: '公式サイト・otokoki のどちらでも照合できませんでした' };
   const d = fmtDate(video.release);
+  if (video.releaseSrc === 'estimate') {
+    const e = video.releaseEst;
+    return {
+      text: `発売 ${d} ごろ（推定）`,
+      title: e ? `${e.from.code}（${fmtDate(e.from.date)}）と ${e.to.code}（${fmtDate(e.to.date)}）から推定` : '同じレーベルの前後の品番の発売日から推定',
+    };
+  }
   return video.releaseSrc === 'official'
     ? { text: `発売 ${d}（CK 公式）`, title: 'CK DOWNLOAD（COAT グループの公式配信サイト）の配信日' }
     : { text: `発売 ${d} ごろ（otokoki）`, title: 'otokoki の紹介記事の掲載日（発売日の目安。実際の発売日とは数日ずれることがあります）' };
@@ -150,8 +160,8 @@ function renderSection(el) {
       <div class="switch"><span>発売日を取得する</span><button class="toggle ${enabled ? 'on' : ''}" data-act="toggle" aria-label="切り替え"></button></div>
       <div class="status">${release.running ? release.status : release.status || (state.release.byTitle.size ? `${state.release.byTitle.size.toLocaleString()} 件の対応表` : 'まだ取得していません')}</div>
       <div class="btn-row"><button class="btn" data-act="refetch" ${release.running ? 'disabled' : ''}>取り直す</button></div>
-      <p class="note" style="margin-bottom:0">絞り込みの「日付の基準」で「発売日」を選ぶと、この日付で並びます。詳細には日付の出どころ（CK 公式 / otokoki）を添えて表示します。</p>
-      <details class="more"><summary>詳しく</summary><p class="note">COAT グループの作品は、公式配信サイト CK DOWNLOAD の配信日を使います（詳細を開いたときと、収集のついでに 1 日 ${OFFICIAL_PER_DAY} 本まで品番で調べます。1 本あたり約 200KB）。それ以外は、otokoki（ゲイ動画の紹介サイト）が新作の配信に合わせて記事を出すため、その掲載日を発売日の目安にしています（記事に発売日は書かれていませんが、公式の発売日とはおおむね 0〜3 日差です）。掲載元に投稿された日より遅い日付は、再販などの日付とみなして使いません。照合できない動画は「発売日不明」となり、発売日順では後ろに並びます。初回は otokoki の記事のタイトルと日付だけを全件（数 MB）取得します。</p></details>`;
+      <p class="note" style="margin-bottom:0">絞り込みの「日付の基準」で「発売日」を選ぶと、この日付で並びます。詳細には日付の出どころ（CK 公式 / otokoki / 推定）を添えて表示します。発売日が分からない動画も、同じレーベルの前後の品番の発売日から推定できれば「ごろ（推定）」として使います。</p>
+      <details class="more"><summary>詳しく</summary><p class="note">COAT グループの作品は、公式配信サイト CK DOWNLOAD の配信日を使います（詳細を開いたときと、収集のついでに 1 日 ${OFFICIAL_PER_DAY} 本まで品番で調べます。1 本あたり約 200KB）。それ以外は、otokoki（ゲイ動画の紹介サイト）が新作の配信に合わせて記事を出すため、その掲載日を発売日の目安にしています（記事に発売日は書かれていませんが、公式の発売日とはおおむね 0〜3 日差です）。どちらでも分からない動画は、同じレーベル（品番の英字部分）で番号が前後する作品の発売日から、番号の比で日付を推定します（前後の両方が分かっていて、番号差 ${ESTIMATE.maxGap} 以内・日付の間が ${ESTIMATE.maxSpanDays} 日以内のときだけ。おおむね数日以内の誤差です）。一覧では日付に「頃」を付けて区別します。掲載元に投稿された日より遅い日付は、再販などの日付とみなして使いません。どれでも分からない動画は「発売日不明」となり、発売日順では後ろに並びます。初回は otokoki の記事のタイトルと日付だけを全件（数 MB）取得します。</p></details>`;
     el.querySelector('[data-act="toggle"]').onclick = async () => {
       await db.kvSet('releaseEnabled', !enabled);
       if (!enabled) collectRelease({ force: true });
