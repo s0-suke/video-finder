@@ -1,37 +1,90 @@
 // 品番の抽出と、重複をまとめるための統合キー（DOM に依存しない純粋関数。node --test で検証する）
 
-// 品番（例: MR-KR2387, GT-2720, SUPD-123）
-export const CODE_RE = /\b([A-Z]{2,8}-(?:[A-Z]{1,4}-?)?\d{2,6})\b/i;
+// 品番（例: MR-KR2387, GT-2720, SUPD-123, OR-COAV001-04, SILK-207-1）。
+// 直後に付く分割番号（-1 / -04 / _001 / -B）は別の動画なので品番に含める。GT-2720_DL のような付記は含めない。
+// 「RYOMA-19歳」のような名前と年齢は品番にしない
+export const CODE_RE = /(?<![A-Z0-9])([A-Z]{2,8}-(?:[A-Z]{1,4}-?)?\d{2,6}(?:[-_](?:\d{1,3}|[A-F]))?)(?![A-Z0-9]|[-_]\d|[歳才])/i;
 
-// 品番の形をしているが品番ではない一般的な語（Part-02 / Vol-01 / Best-of-2023 / COVID-19 など）
-const NOT_CODE = /^(PART|PT|VOL|EP|EPS|EPISODE|SCENE|CHAPTER|CH|BEST|TOP|NO|NUM|COVID|FULLHD|FHD|HD|UHD|JAPAN|DAY|YEAR|SEASON|DISC|CD|DVD|MP|H|X|COLLECTION)\b/i;
+// 品番の形をしているが品番ではない一般的な語（Best-of-2023 / COVID-19 / FullHD-1080 など）
+const NOT_CODE = /^(BEST|TOP|NUM|COVID|FULLHD|FHD|HD|UHD|JAPAN|DAY|YEAR|SEASON|MP|H|X|COLLECTION)(?![A-Z])/i;
+// 回数・巻数を表す語（Part-02 / Vol-01 / CH-01）。番号が 3 桁までのときだけ品番から除く（CH-00541 は品番）
+const ORDINAL = /^(PART|PT|VOL|EP|EPS|EPISODE|SCENE|CHAPTER|CH|NO|DISC|CD|DVD)-?(\d+)/i;
+const notCode = (c) => NOT_CODE.test(c) || (ORDINAL.test(c) && c.match(ORDINAL)[2].length <= 3);
 const isYear = (digits) => /^(19|20)\d\d$/.test(digits);
+
+// FC2 コンテンツマーケットの番号は書き方がサイトでばらばら（FC2-PPV-1234567 / FC2PPV1234567 / FC1234567）なのでそろえる
+const FC2_RE = /^(?:FC2-?PPV-?|FC)(\d{6,8})$/i;
+// タイトル先頭の「品番 – 」（COCO566-02 / 01-26-0013-02 / VDGBXX0466_001 / FC2-PPV-1365684 など、掲載元ごとの番号）
+const LEAD_RE = /^\s*【?([A-Z0-9]+(?:[-_][A-Z0-9]+){0,4})】?\s+[–—-]\s/i;
+// 英数字と - _ だけでできていて、2 桁以上の数字を含む語（品番らしい語。スタジオ名の候補から除くのにも使う）
+export const looksLikeCode = (t) => /^[A-Z0-9]+(?:[-_][A-Z0-9]+)*(?:\s*\(\d+\))?$/i.test(t.trim()) && /\d\d/.test(t);
+
+function canonCode(c) {
+  const u = c.toUpperCase();
+  const fc = u.match(FC2_RE);
+  return fc ? 'FC2-PPV-' + fc[1] : u;
+}
 
 function codeIn(text) {
   for (const m of text.matchAll(new RegExp(CODE_RE.source, 'gi'))) {
     const code = m[1];
-    if (NOT_CODE.test(code) || /-OF-/i.test(code)) continue;
+    if (notCode(code) || /-OF-/i.test(code)) continue;
     // 年に見える番号（1925 / 2024）は、接頭辞が 2〜4 文字の大文字のとき（GT-1925）だけ品番として扱う（Summer-2024 などを除く）
-    if (isYear(code.match(/(\d+)$/)[1]) && !/^[A-Z]{2,4}-/.test(code)) continue;
-    return code.toUpperCase();
+    const num = code.match(/-(\d+)(?:[-_][0-9A-F]+)?$/i)?.[1] || '';
+    if (isYear(num) && !/^[A-Z]{2,4}-/.test(code)) continue;
+    return canonCode(code);
   }
   return null;
 }
 
+// タグ全体が品番か（BWB383 → BWB-383、COCO566-02、ORWEMA091、01-26-0013-02、FC4468205 → FC2-PPV-4468205）
+function tagCode(t) {
+  const s = t.trim().replace(/\s*\(\d+\)$/, ''); // 「BOY-397 (2)」のような重複よけの番号
+  const mt = s.match(CODE_RE);
+  if (mt && mt[0].length >= s.length - 1) {
+    const c = codeIn(s);
+    if (c) return c;
+  }
+  if (FC2_RE.test(s)) return canonCode(s);
+  // ハイフンなしの品番は、英字と数字の間にハイフンを補う（Japan2024 のような年は除く。COAT2004 のような大文字 4 文字までの接頭辞は品番）
+  const bare = s.match(/^([A-Z]{2,5})(\d{3,5})$/i);
+  if (bare) {
+    if (NOT_CODE.test(bare[1]) || ORDINAL.test(s)) return null;
+    if (isYear(bare[2]) && !/^[A-Z]{2,4}$/.test(bare[1])) return null;
+    return `${bare[1]}-${bare[2]}`.toUpperCase();
+  }
+  // 掲載元独自の番号（英字 2〜8 文字 + 数字 2 桁以上 + 分割番号、または 01-26-0013-02 の形）
+  if (/^[A-Z]{2,8}\d{2,8}(?:[-_](?:\d{1,3}|[A-F]))?$/i.test(s) && !notCode(s) && !isYear(s.match(/\d+/)[0])) return s.toUpperCase();
+  if (/^[A-Z]{0,3}-?\d{2}-\d{2}-\d{4}-\d{2}$/i.test(s)) return s.toUpperCase();
+  return null;
+}
+
+// タイトル先頭の「品番 – 」
+function leadCode(title) {
+  const m = title.match(LEAD_RE);
+  if (!m) return null;
+  return codeIn(m[1]) || tagCode(m[1]);
+}
+
 export function extractCode(title, tags = []) {
-  const fromTitle = codeIn(title);
+  const fromTitle = leadCode(title) || codeIn(title);
   if (fromTitle) return fromTitle;
   for (const t of tags) {
-    const mt = t.match(CODE_RE);
-    if (mt && mt[0].length >= t.trim().length - 1) {
-      const c = codeIn(t);
-      if (c) return c;
-    }
-    // タグ全体がハイフンなしの品番（BWB383 など）なら、英字と数字の間にハイフンを補う（Japan2024 のような年は除く）
-    const bare = t.trim().match(/^([A-Z]{2,5})(\d{3,5})$/i);
-    if (bare && !isYear(bare[2]) && !NOT_CODE.test(bare[1])) return `${bare[1]}-${bare[2]}`.toUpperCase();
+    const c = tagCode(t);
+    if (c) return c;
   }
   return null;
+}
+
+// 統合に使う、投稿に付いている品番すべて（タイトルの品番と、品番だけのタグ。比較用の形）。
+// 掲載元によって同じ作品に別の番号（販売元の番号とメーカーの番号など）が付くことがあるので、どれかが一致すればまとめる
+export function codesOf(title, tags = [], code = null) {
+  const out = new Set();
+  const add = (c) => { if (c) out.add(normalizeCode(c)); };
+  add(code);
+  add(leadCode(title) || codeIn(title));
+  for (const t of tags) add(tagCode(t));
+  return [...out];
 }
 
 // タグが品番そのものか（表示用のタグから除く）
@@ -49,12 +102,13 @@ export function safeUrl(u, base) {
 }
 
 // 比較用に品番からハイフンを除く（MR-KR2387 と MRKR2387 を同一視）
-export const normalizeCode = (code) => code.replace(/-/g, '').toUpperCase();
+export const normalizeCode = (code) => code.replace(/[-_]/g, '').toUpperCase();
 
 // タイトル先頭の「品番 – 」を取り除く
 export function stripCode(title, code) {
   if (!code) return title;
-  const re = new RegExp('^\\s*' + code.replace(/-/g, '-?') + '\\s*[–\\-:：]?\\s*', 'i');
+  const body = code.startsWith('FC2-PPV-') ? '(?:FC2-?PPV-?|FC)' + code.slice(8) : code.replace(/[-_]/g, '[-_]?');
+  const re = new RegExp('^\\s*【?' + body + '(?:_[A-Z]{2,3}(?![A-Z0-9]))?】?\\s*[–—\\-:：]?\\s*', 'i');
   return title.replace(re, '') || title;
 }
 
@@ -67,17 +121,228 @@ export function groupKey(code, title, postKey) {
   return norm.length >= 10 ? 'title:' + norm : 'post:' + postKey;
 }
 
+// ---- 投稿をまとめて動画にする ----
+
+// タイトルの似ている度合い（記号を除いた 2 文字ずつの組の重なり。0〜1）
+export function titleSimilarity(a, b) {
+  const grams = (s) => {
+    const n = normalizeTitle(s || '');
+    const g = new Set();
+    for (let i = 0; i < n.length - 1; i++) g.add(n.slice(i, i + 2));
+    if (n.length === 1) g.add(n);
+    return g;
+  };
+  const A = grams(a), B = grams(b);
+  if (!A.size || !B.size) return 0;
+  let k = 0;
+  for (const x of A) if (B.has(x)) k++;
+  return k / (A.size + B.size - k);
+}
+
+// 同じサイトの 2 つの投稿を同じ作品とみなす似ている度合い（これ未満なら、品番が同じでも別作品）
+const SAME_SITE_SIM = 0.25;
+// これより多くの投稿に付いている「品番」は、品番ではなく分類用の語とみなして統合に使わない
+const MAX_CODE_POSTS = 30;
+// 英数字だけの短いタイトル（Raw Passion / Full Service など）は別作品で重なりやすいので、スタジオが同じときだけまとめる
+const weakTitle = (t) => t.length < 20 && !/[^\x00-\x7F]/.test(t);
+
+// 統合に使うタイトルのキー（groupKey と同じ正規化。短すぎるものは null）
+export const titleKeyOf = (title) => { const t = normalizeTitle(title || ''); return t.length >= 10 ? t : null; };
+
+// 投稿（{ key, siteId, code, title, tags, group, codes?, tkey? }。codes / tkey は覚えておいた codesOf / titleKeyOf の結果）をまとめ、投稿の key → 統合キー の Map を返す。
+// 1. 品番（codesOf: タイトルの品番と品番だけのタグ。どれか 1 つ一致すればよい）が同じ投稿をまとめる
+// 2. 同じタイトル（groupKey と同じ正規化で 10 文字以上）の投稿をまとめる。品番のない投稿は、同じタイトルの品番付きの投稿に合流する。
+//    ただし、そのタイトルに別々の品番が付いているとき（同名の別作品・シリーズ）はまとめない
+// どちらでも、同じサイトの投稿同士でタイトルがまったく違うもの（掲載元の品番の付け間違い、同じ番号の別シリーズ）はまとめない。
+// 統合キーは、まとめた投稿の group のうち品番のもの（なければタイトルのもの）で最も多いもの。重なったら「~投稿の key」を付けて分ける
+export function clusterPosts(posts) {
+  const n = posts.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const members = Array.from({ length: n }, (_, i) => [i]);
+  const find = (i) => { while (parent[i] !== i) i = parent[i] = parent[parent[i]]; return i; };
+  const tkey = posts.map((p) => (p.tkey !== undefined ? p.tkey : titleKeyOf(p.title)));
+  const sameWork = (i, j) => (tkey[i] && tkey[i] === tkey[j]) || titleSimilarity(posts[i].title, posts[j].title) >= SAME_SITE_SIM;
+  const union = (i, j) => {
+    let a = find(i), b = find(j);
+    if (a === b) return;
+    for (const x of members[a]) for (const y of members[b]) if (posts[x].siteId === posts[y].siteId && !sameWork(x, y)) return;
+    if (members[a].length < members[b].length) [a, b] = [b, a];
+    parent[b] = a;
+    members[a] = members[a].concat(members[b]);
+    members[b] = null;
+  };
+
+  // 1. 品番
+  const byCode = new Map();
+  posts.forEach((p, i) => {
+    for (const c of p.codes || codesOf(p.title || '', p.tags || [], p.code)) {
+      let a = byCode.get(c);
+      if (!a) byCode.set(c, (a = []));
+      a.push(i);
+    }
+  });
+  for (const list of byCode.values()) {
+    if (list.length < 2 || list.length > MAX_CODE_POSTS) continue;
+    // 似ているもの同士から先にまとめる（同じサイトの別作品が先に別の投稿とくっつかないように）
+    const pairs = [];
+    for (let x = 0; x < list.length; x++) for (let y = x + 1; y < list.length; y++) {
+      const i = list[x], j = list[y];
+      pairs.push([tkey[i] && tkey[i] === tkey[j] ? 1 : titleSimilarity(posts[i].title, posts[j].title), i, j]);
+    }
+    pairs.sort((a, b) => b[0] - a[0]);
+    for (const [, i, j] of pairs) union(i, j);
+  }
+
+  // 2. タイトル
+  const byTitle = new Map();
+  posts.forEach((p, i) => {
+    if (!tkey[i]) return;
+    let a = byTitle.get(tkey[i]);
+    if (!a) byTitle.set(tkey[i], (a = []));
+    a.push(i);
+  });
+  for (const [t, list] of byTitle) {
+    if (list.length < 2) continue;
+    // 別々の品番が付いているときは、同名の別作品（シリーズの各巻など）のことが多いのでまとめない。
+    // ただしタイトルが長く、どのサイトでも品番が 1 種類なら、販売元ごとに番号が違うだけの同じ作品（CAPY-473 と KPP-0473 など）とみなす
+    const codes = new Set(list.map((i) => posts[i].code && normalizeCode(posts[i].code)).filter(Boolean));
+    if (codes.size > 1) {
+      if (t.length < 15) continue;
+      const perSite = new Map();
+      for (const i of list) {
+        const c = posts[i].code && normalizeCode(posts[i].code);
+        if (!c) continue;
+        if (!perSite.has(posts[i].siteId)) perSite.set(posts[i].siteId, new Set());
+        perSite.get(posts[i].siteId).add(c);
+      }
+      if ([...perSite.values()].some((set) => set.size > 1)) continue;
+    }
+    if (!weakTitle(t)) { for (const i of list.slice(1)) union(list[0], i); continue; }
+    // 短い英語のタイトルは、スタジオの候補（タグ・カテゴリ）が 1 つでも同じ投稿同士だけまとめる
+    const labels = list.map((i) => new Set(studioCandidates(posts[i].tags || []).map(studioKey)));
+    for (let x = 0; x < list.length; x++) for (let y = x + 1; y < list.length; y++) {
+      if ([...labels[x]].some((k) => labels[y].has(k))) union(list[x], list[y]);
+    }
+  }
+
+  // 統合キー
+  const roots = [];
+  for (let i = 0; i < n; i++) if (members[i]) roots.push(i);
+  roots.sort((a, b) => members[b].length - members[a].length || (posts[members[a][0]].key < posts[members[b][0]].key ? -1 : 1));
+  const used = new Set();
+  const out = new Map();
+  for (const r of roots) {
+    const count = new Map();
+    for (const i of members[r]) count.set(posts[i].group, (count.get(posts[i].group) || 0) + 1);
+    const rank = (g) => (g.startsWith('code:') ? 2 : g.startsWith('title:') ? 1 : 0);
+    let key = [...count].sort((a, b) => rank(b[0]) - rank(a[0]) || b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0];
+    if (used.has(key)) key += '~' + members[r].map((i) => posts[i].key).sort()[0];
+    used.add(key);
+    for (const i of members[r]) out.set(posts[i].key, key);
+  }
+  return out;
+}
+
 // スタジオ名ではない分類・告知用のタグ（igay69 の [PORN] / [LEAK] / #NEW など）
 export const isNoiseTag = (t) => /^\[.*\]$|^#|^(AAA|uncategorized|未分類)$/i.test(t.trim());
 
-// スタジオ名はタグ側（品番・分類タグ以外）を優先、なければカテゴリ
-export function pickStudio(tags, cats) {
-  const ok = (t) => !CODE_RE.test(t) && !isNoiseTag(t);
-  return tags.find(ok) || cats.find(ok) || null;
+// 掲載サイトの大分類（poapan / javboys のカテゴリ）。レーベル名ではないのでスタジオにしない
+const GENERIC_TERM = /^(japan(ese)? (movies|gay scenes|av scenes)|western movies|asian( movies)?|thai|magazine|all gay porn|gay porn)$/i;
+
+// 同じレーベルの別表記（studioKey の形 → 正式なほうの studioKey）。
+// 3 サイトの全投稿で、同じ作品に付いたレーベル名の組み合わせから見つけたもの
+const STUDIO_ALIASES = new Map(Object.entries({
+  games: 'gmes', // GAMES → G@MES
+  西麻布撮影所: 'nishiazabufilmstudio',
+  ko裸王raoh: 'koraoh',
+  プリズム: 'prism',
+  bravojapan: 'bravo', // BRAVO-JAPAN → BRAVO!
+  gdude: 'gdudejp',
+  rchsjapan: 'rchsstudio',
+  menscom: 'mencom', // Men's Com → MEN.com
+  bbvideos: 'bbvideo',
+  mensberaker: 'mensbreaker', // 掲載元の綴り誤り
+  boystuido: 'boystudio',
+  kocompany: 'ko', // KO COMPANY と、gayvidsclub のカテゴリ「KO」
+  コニーキャラバン: 'conycaracan',
+  // 販売元の自社作品のタグは販売元にまとめる
+  hunkオリジナル: 'hunkchannel',
+  ckオリジナル: 'ckdownload',
+  kotubeオリジナル: 'kotube',
+}));
+
+// 表記ゆれのあるスタジオ名（MEN'S RUSH.TV / Men's Rush.TV / Men’s Rush.TV、G@MES / GAMES）を同じものとして扱うためのキー
+const studioKeyCache = new Map();
+export function studioKey(name) {
+  if (!name) return '';
+  let k = studioKeyCache.get(name);
+  if (k === undefined) {
+    k = normalizeTitle(name);
+    k = STUDIO_ALIASES.get(k) || k;
+    if (studioKeyCache.size > 50000) studioKeyCache.clear();
+    studioKeyCache.set(name, k);
+  }
+  return k;
 }
 
-// 表記ゆれのあるスタジオ名（MEN'S RUSH.TV / Men's Rush.TV / Men’s Rush.TV）を同じものとして扱うためのキー
-export const studioKey = (name) => normalizeTitle(name || '');
+// スタジオ名の候補になるタグ・カテゴリ（品番・分類タグ・大分類を除き、表記ゆれは 1 つにまとめる）
+export function studioCandidates(terms) {
+  const seen = new Set();
+  const out = [];
+  for (const t of terms) {
+    if (!t || isNoiseTag(t) || GENERIC_TERM.test(t.trim()) || looksLikeCode(t) || CODE_RE.test(t) || tagCode(t)) continue;
+    const k = studioKey(t);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
+// レーベル名とみなすのに必要な「単独で付いていた投稿」の数
+const LABEL_MIN = 3;
+// 複数のメーカーの作品を扱う販売サイト（studioKey の形）。メーカー名も付いていればそちらを採る
+const PLATFORMS = new Set(['hunkchannel', 'mensrushtv', 'ckdownload', 'kotube', 'fc2']);
+
+// レーベルらしさの目安: 候補がそれ 1 つだけだった投稿の数（studioKey → 件数）。
+// poapan のように「レーベル + 品番」だけのタグが付くサイトや、gayvidsclub のカテゴリから集まる。
+// 出演者名・シリーズ名は必ずレーベル名と一緒に付くので数が増えない
+// candidateLists は投稿ごとの studioCandidates の結果
+export function studioRank(candidateLists) {
+  const rank = new Map();
+  for (const c of candidateLists) {
+    if (c.length === 1) { const k = studioKey(c[0]); rank.set(k, (rank.get(k) || 0) + 1); }
+  }
+  return rank;
+}
+
+// スタジオ名を選ぶ。
+// - 品番・分類タグ・大分類（Japan Gay Scenes など）は除く
+// - rank（studioRank）があれば、レーベルと分かっている候補のうち最も絞り込まれたもの（件数の少ないもの）を採る。
+//   販売サイト（HUNK CHANNEL / Men's Rush.TV など）はメーカー名がなければ採る。
+//   javboys の「HUNK CHANNEL（販売元）+ オルガズムモード（シリーズ）」なら HUNK CHANNEL、
+//   「GET-film（メーカー）+ Men's Rush.TV（販売元）」なら GET-film
+// - それ以外はカテゴリ → タグの順で最初の候補
+export function pickStudio(tags, cats = [], rank = null) {
+  return chooseStudio(studioCandidates([...cats, ...tags]), rank);
+}
+
+// studioCandidates の結果からスタジオ名を選ぶ（pickStudio の後半。候補を覚えておいて選び直すときに使う）
+export function chooseStudio(c, rank = null) {
+  if (!c.length) return null;
+  if (rank) {
+    let best = null, bestN = Infinity;
+    for (const t of c) {
+      const k = studioKey(t);
+      const n = rank.get(k) || 0;
+      if (n < LABEL_MIN) continue;
+      const score = PLATFORMS.has(k) ? n + 1e9 : n; // 販売サイトは最後の候補
+      if (score < bestN) { best = t; bestN = score; }
+    }
+    if (best) return best;
+  }
+  return c[0];
+}
 
 // ---- 発売日の目安（otokoki の記事タイトルとの照合）----
 
@@ -120,7 +385,7 @@ export function ckCodes({ code, studio, tags = [], titles = [] }) {
   const add = (c) => {
     if (!c) return;
     const u = c.trim().toUpperCase();
-    if (CK_TOKEN.test(u) && !NOT_CODE.test(u) && !out.includes(u)) out.push(u);
+    if (CK_TOKEN.test(u) && !notCode(u) && !out.includes(u)) out.push(u);
   };
   for (const t of titles) add((t || '').match(CK_LEAD)?.[1]);
   add(code);

@@ -6,11 +6,34 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey, isNoiseTag, pickStudio, extractCode, groupKey, isCodeTag, normalizeCode, releaseTitleKey, plausibleRelease, stripCode, safeUrl } from './matching.js';
+import { studioKey, isNoiseTag, studioCandidates, studioRank, chooseStudio, extractCode, groupKey, isCodeTag, normalizeCode, normalizeTitle, codesOf, titleKeyOf, clusterPosts, releaseTitleKey, plausibleRelease, stripCode, safeUrl } from './matching.js';
 import { buildEstimateIndex, estimateRelease } from './release-estimate.js';
 
-// 以前の版で分類タグ（[PORN] など）をスタジオとして保存した投稿を、読み込み時に直す
-const studioOf = (p) => (p.studio && isNoiseTag(p.studio) ? pickStudio(p.tags, []) : p.studio);
+// スタジオ名は保存した値を使わず、rebuild のたびにタグ・カテゴリ（p.tags）から選び直す
+// （判定を改良したときに保存済みの投稿にも効くように。候補の洗い出しは投稿ごとに覚えておく）
+const candCache = new WeakMap();
+function studioCandsOf(p) {
+  const sig = (p.tags || []).join('\u0001') + '\u0001' + (p.studio || '');
+  let c = candCache.get(p);
+  // 保存しておいたスタジオ名は、タグ・カテゴリに候補がないときの予備（最後の候補）
+  if (!c || c.sig !== sig) candCache.set(p, (c = { sig, cands: studioCandidates([...(p.tags || []), p.studio]) }));
+  return c.cands;
+}
+// 品番だけのタグか（表示用のタグから除く。同じタグが何度も出るので覚えておく）
+const codeTagCache = new Map();
+function codeTag(t) {
+  let r = codeTagCache.get(t);
+  if (r === undefined) { if (codeTagCache.size > 100000) codeTagCache.clear(); codeTagCache.set(t, (r = isCodeTag(t))); }
+  return r;
+}
+// 統合に使う品番の一覧とタイトルのキー（タイトル・タグ・品番が変わらない限り作り直さない）
+const codesCache = new WeakMap();
+function codesOfPost(p) {
+  const sig = p.title + '\u0001' + (p.code || '') + '\u0001' + (p.tags || []).join('\u0001');
+  let c = codesCache.get(p);
+  if (!c || c.sig !== sig) codesCache.set(p, (c = { sig, codes: codesOf(p.title || '', p.tags || [], p.code), tkey: titleKeyOf(p.title) }));
+  return c;
+}
 
 export const DEFAULT_SITES = [
   'https://gayvidsclub.com/',
@@ -103,7 +126,9 @@ export async function loadAll() {
 // - 品番のない投稿 → 新しい判定で品番が取れれば付ける
 // - 一般語（Part-02 など）を誤って品番にしていた投稿 → 外す
 // - 外部 URL が http(s) でないリンクは捨てる
-function migratePost(p) {
+// - 分割番号（GDSR-002-2）を落として「2 – タイトル」と保存した投稿 → 品番に分割番号を戻す
+// - タイトルの途中の語を品番にしていた投稿（「涼真-RYOMA-19歳が…」の RYOMA-19）→ 判定し直す
+export function migratePost(p) {
   let changed = false;
   if (p.link && !safeUrl(p.link)) { p.link = ''; changed = true; }
   if (p.code && extractCode(p.code) !== p.code) {
@@ -111,13 +136,27 @@ function migratePost(p) {
     p.group = groupKey(null, p.title, p.key);
     changed = true;
   }
-  if (p.code) return changed;
+  if (p.code) {
+    const part = p.title.match(/^(\d{1,3}|[A-F])\s+[–—-]\s+/);
+    if (part && /^[A-Z]{2,8}-/.test(p.code)) {
+      p.code = `${p.code}-${part[1]}`;
+      p.title = p.title.slice(part[0].length);
+      p.group = groupKey(p.code, p.title, p.key);
+      return true;
+    }
+    // 品番がタイトルの途中に残っている（先頭から外せなかった）ものだけ判定し直す
+    if (!normalizeTitle(p.title).includes(normalizeTitle(p.code))) return changed;
+    const again = extractCode(p.title, p.tags || []);
+    if (again === p.code) return changed;
+    p.code = null;
+    p.group = groupKey(null, p.title, p.key);
+    changed = true;
+  }
   const code = extractCode(p.title, p.tags || []);
   if (!code) return changed;
   p.code = code;
   p.title = stripCode(p.title, code);
   p.group = groupKey(code, p.title, p.key);
-  p.tags = (p.tags || []).filter((t) => !isCodeTag(t));
   return true;
 }
 
@@ -143,25 +182,32 @@ function hayOf(p) {
 export function rebuild() {
   const enabled = new Set(state.sites.filter((s) => s.enabled).map((s) => s.id));
   const siteName = Object.fromEntries(state.sites.map((s) => [s.id, s.name]));
+  const posts = [...state.posts.values()].filter((p) => enabled.has(p.siteId));
+  // 品番（別の書き方・別の番号も含む）とタイトルで投稿をまとめる（matching.js の clusterPosts）
+  const groupOf = clusterPosts(posts.map((p) => ({ key: p.key, siteId: p.siteId, code: p.code, title: p.title, tags: p.tags, group: p.group, ...codesOfPost(p) })));
   const groups = new Map();
-  for (const p of state.posts.values()) {
-    if (!enabled.has(p.siteId)) continue;
-    let g = groups.get(p.group);
-    if (!g) groups.set(p.group, (g = []));
+  for (const p of posts) {
+    const k = groupOf.get(p.key) || p.group;
+    let g = groups.get(k);
+    if (!g) groups.set(k, (g = []));
     g.push(p);
   }
 
-  // スタジオ名は表記ゆれをまとめ、いちばん多い表記を表示名にする
+  // スタジオ名: レーベルらしさ（単独で付いていた投稿の数）を数え、投稿ごと・動画ごとに選び直す。
+  // 表記ゆれはまとめ、いちばん多い表記を表示名にする
+  const rank = studioRank(posts.map(studioCandsOf));
+  const studioOf = (p) => chooseStudio(studioCandsOf(p), rank);
   const studioNames = new Map(); // key -> Map(name -> count)
   const videos = [];
   for (const [key, rows] of groups) {
     rows.sort((a, b) => (b.thumb ? 1 : 0) - (a.thumb ? 1 : 0) || (a.date < b.date ? 1 : -1));
     const main = rows[0];
     const rawTags = [...new Set(rows.flatMap((r) => r.tags))];
-    const studio = rows.map(studioOf).find(Boolean) || null;
+    // 投稿ごとのスタジオのうち、メーカーと分かっているもの（販売サイトより絞り込まれたもの）を採る
+    const studio = chooseStudio(studioCandidates(rows.map(studioOf).filter(Boolean)), rank);
     const sKey = studio ? studioKey(studio) : null;
-    // 表示用のタグからは、分類タグとスタジオ名の言い換え（MEN'S RUSH など）を除く。検索には全部使う
-    const tags = rawTags.filter((t) => !isNoiseTag(t) && !(sKey && studioKey(t).length >= 4 && sKey.startsWith(studioKey(t))));
+    // 表示用のタグからは、分類タグ・品番だけのタグ・スタジオ名の言い換え（MEN'S RUSH など）を除く。検索には全部使う
+    const tags = rawTags.filter((t) => !isNoiseTag(t) && !codeTag(t) && !(sKey && studioKey(t).length >= 4 && sKey.startsWith(studioKey(t))));
     if (sKey) {
       let m = studioNames.get(sKey);
       if (!m) studioNames.set(sKey, (m = new Map()));
