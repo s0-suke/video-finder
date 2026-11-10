@@ -70,3 +70,60 @@ test('発売日: 公式の配信日を otokoki より優先し、掲載元の投
   state.release.byCode.clear();
   state.release.official.clear();
 });
+
+import { migratePost } from '../js/data.js';
+
+test('保存済みの投稿を新しい品番の判定で直す（分割番号・名前と年齢・タイトル先頭の掲載元の番号）', () => {
+  // 以前の版は GDSR-002-2 の分割番号を落とし、タイトルに「2 – 」を残していた
+  const a = post(4, 1, { title: '2 – 淫父蕩子', code: 'GDSR-002', group: 'code:GDSR002' });
+  assert.equal(migratePost(a), true);
+  assert.deepEqual([a.code, a.title, a.group], ['GDSR-002-2', '淫父蕩子', 'code:GDSR0022']);
+  // 以前の版は「RYOMA-19歳」を品番にしていた
+  const b = post(1, 2, { title: 'あの大人気巨根カコカワモデル涼真-RYOMA-19歳が某ネカフェで', code: 'RYOMA-19', group: 'code:RYOMA19', tags: ['STR8BOYS'] });
+  assert.equal(migratePost(b), true);
+  assert.equal(b.code, null);
+  assert.ok(b.group.startsWith('title:'));
+  // 以前の版はタイトル先頭の COCO566-02 を品番にしていなかった
+  const c = post(3, 3, { title: 'COCO566-02 – 〈飛貴〉人生初アナルSEX', code: null, group: 'title:x', tags: ['COAT', 'COCO566-02'] });
+  assert.equal(migratePost(c), true);
+  assert.deepEqual([c.code, c.title, c.group], ['COCO566-02', '〈飛貴〉人生初アナルSEX', 'code:COCO56602']);
+  // 正しく判定済みの投稿は変えない
+  const d = post(4, 4, { title: '顔射に中出し', code: 'GT-2714', group: 'code:GT2714' });
+  assert.equal(migratePost(d), false);
+});
+
+test('一覧のスタジオ: 品番・大分類は選ばず、シリーズ名よりレーベル、販売サイトよりメーカーを選ぶ', () => {
+  state.sites = [{ id: 1, name: 'a', enabled: true }, { id: 4, name: 'b', enabled: true }];
+  const many = (n, siteId, tags) => Array.from({ length: n }, (_, i) => post(siteId, 1000 * siteId + n + i, { title: `単独${siteId}-${tags[0]}-${i}`, group: `post:${siteId}:${i}${tags[0]}`, tags }));
+  const rows = [
+    ...many(4, 1, ['HUNK CHANNEL', 'Hunk Channel']), ...many(3, 4, ['GET-film']), ...many(3, 1, ["MEN'S RUSH.TV"]),
+    post(1, 1, { title: '作品X', code: 'DT-031', group: 'code:DT031', tags: ['HUNK CHANNEL', 'DT031', 'Hunk Channel'], studio: 'DT031' }),
+    post(4, 1, { title: '作品Y', code: 'OAV-1379', group: 'code:OAV1379', tags: ['Japan Gay Scenes', 'HUNK CHANNEL', 'OAV1379', 'オルガズムモード'] }),
+    post(4, 2, { title: '作品Z', code: 'GT-2705', group: 'code:GT2705', tags: ['Japan Gay Scenes', 'GET-film', 'GT-2705', 'Men’s Rush.TV'] }),
+    post(1, 2, { title: '作品Z', code: 'GT-2705', group: 'code:GT2705', tags: ["MEN'S RUSH.TV", 'GT-2705'] }),
+  ];
+  state.posts = new Map(rows.map((p) => [p.key, p]));
+  rebuild();
+  const by = (code) => state.videos.find((v) => v.code === code);
+  assert.equal(by('DT-031').studioKey, 'hunkchannel');
+  assert.equal(by('OAV-1379').studioKey, 'hunkchannel');
+  assert.equal(by('GT-2705').studioKey, 'getfilm');
+  assert.equal(by('GT-2705').sources.length, 2);
+  assert.ok(!by('OAV-1379').tags.includes('OAV1379'), '品番だけのタグは表示しない');
+  assert.ok(!state.studios.some((s) => s.key === 'dt031' || s.key === 'japangayscenes'));
+});
+
+test('一覧の統合: 品番のない投稿を同じタイトルの品番付きの投稿にまとめ、同じサイトの番号の使い回しは分ける', () => {
+  state.sites = [{ id: 1, name: 'a', enabled: true }, { id: 4, name: 'b', enabled: true }];
+  state.posts = new Map([
+    post(1, 1, { title: 'エロ過ぎ!!生突きされ泣き喘ぐ18歳の割れ目にザーメン', code: null, group: 'title:a', tags: ["MEN'S RUSH.TV"] }),
+    post(4, 1, { title: 'エロ過ぎ!!生突きされ泣き喘ぐ18歳の割れ目にザーメン', code: 'MR-KR2348', group: 'code:MRKR2348', tags: ['Men’s Rush.TV', 'MR-KR2348'] }),
+    post(4, 2, { title: '再編集！巨根！高身長のイケメンが電マで女子をガッツリ攻める！', code: 'BOY-126', group: 'code:BOY126', tags: ['BOY studio', 'BOYST0126'] }),
+    post(4, 3, { title: '爽やかイケメンを逆ナンパ！！', code: 'BOY-126', group: 'code:BOY126', tags: ['BOY studio', 'BOY-126'] }),
+  ].map((p) => [p.key, p]));
+  rebuild();
+  assert.equal(state.videos.length, 3);
+  assert.equal(state.byKey.get('code:MRKR2348').sources.length, 2);
+  assert.equal(state.videos.filter((v) => v.code === 'BOY-126').length, 2);
+  assert.equal(new Set(state.videos.map((v) => v.key)).size, 3);
+});

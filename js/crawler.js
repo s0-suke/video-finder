@@ -77,8 +77,10 @@ async function toPosts(site, raw, { backfill }) {
       thumb: media[p.featured_media] || prev.thumb || null,
       // 新着表示用。初回の全件取得で入った分は 0（NEW にしない）
       seenAt: prev.key ? prev.seenAt || 0 : backfill ? 0 : Date.now(),
+      // スタジオは仮の値（一覧ではタグ・カテゴリから選び直す: data.js の rebuild）
       code, group: groupKey(code, clean, key), studio: pickStudio(tags, cats),
-      tags: [...new Set([...cats, ...tags])].filter((t) => !isCodeTag(t)),
+      // 品番だけのタグも残す（別の番号での統合と検索に使う。表示では除く）
+      tags: [...new Set([...cats, ...tags])],
     };
   });
 }

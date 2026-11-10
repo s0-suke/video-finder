@@ -37,9 +37,10 @@ test('品番がなければ正規化したタイトルで統合し、短いタ�
   assert.equal(groupKey(null, 'RUITO×SYO', '1:5'), 'post:1:5');
 });
 
-test('スタジオはタグ（品番以外）を優先し、なければカテゴリ', () => {
-  assert.equal(pickStudio(["Men's Rush.TV", 'GT-2720'], ["MEN'S RUSH.TV"]), "Men's Rush.TV");
-  assert.equal(pickStudio(['GT-2720'], ['AAA', 'Japan Gay Scenes']), 'Japan Gay Scenes');
+test('スタジオはカテゴリ → タグの順で、品番・分類タグ・大分類以外の最初の候補（レーベルの目安がないとき）', () => {
+  assert.equal(studioKey(pickStudio(["Men's Rush.TV", 'GT-2720'], ["MEN'S RUSH.TV"])), studioKey("Men's Rush.TV"));
+  assert.equal(pickStudio(['GT-2720'], ['AAA', 'Japan Gay Scenes']), null, 'サイトの大分類はスタジオにしない');
+  assert.equal(pickStudio(['GT-2720'], ['AAA', 'COAT']), 'COAT');
   assert.equal(pickStudio([], ['AAA']), null);
 });
 
@@ -138,4 +139,159 @@ test('掲載元の最初の投稿日より 2 日を超えて遅い発売日は�
   assert.equal(plausibleRelease('2026-11-06', '2026-11-03T10:00:00'), false);
   assert.equal(plausibleRelease('2026-11-06', ''), true);
   assert.equal(plausibleRelease('', '2026-11-03'), false);
+});
+
+// ---- 3 サイトの全投稿の監査で見つけた誤りの実例 ----
+
+import { studioCandidates, studioRank, chooseStudio, codesOf, clusterPosts, looksLikeCode } from '../js/matching.js';
+
+test('品番の形をしたタグ（掲載元独自の番号）はスタジオにしない', () => {
+  // gayvidsclub: タグがアルファベット順に並ぶので、品番が先に来ていた
+  assert.equal(studioKey(pickStudio(['DT031', 'Hunk Channel'], ['HUNK CHANNEL'])), 'hunkchannel');
+  assert.equal(pickStudio(['FC1653644', 'FC2'], ['FC2']), 'FC2');
+  assert.equal(pickStudio(['VDGBXX0351', 'G-Bot'], ['G-BOT']), 'G-BOT');
+  // javboys / poapan: KO の番号、分割番号付きの番号、小文字の番号
+  assert.equal(pickStudio(['01-08-0111-04', 'KO deep'], ['Japan Gay Scenes']), 'KO deep');
+  assert.equal(pickStudio(['CK-Download', 'COCO566-02'], ['Japan Gay Scenes']), 'CK-Download');
+  assert.equal(pickStudio(['ona0302', 'エッチな0230'], ['Japan Gay Scenes']), 'エッチな0230');
+  assert.equal(pickStudio(['BOY-397 (2)', 'BOY studio'], []), 'BOY studio');
+  // レーベル名に数字が入っていても品番扱いしない
+  for (const t of ['STR8BOYS', '80 Gays', 'Studio 2000', '1098動画オンラインサロン', 'G-Number']) assert.equal(looksLikeCode(t) && studioCandidates([t]).length === 0, false, t);
+});
+
+test('サイトの大分類（Western Movies / Thai / Japan Gay Scenes）はスタジオにしない', () => {
+  assert.equal(pickStudio([], ['Western Movies']), null);
+  assert.equal(pickStudio([], ['Thai']), null);
+  assert.equal(pickStudio(['Bel Ami'], ['Western Movies']), 'Bel Ami');
+  assert.equal(pickStudio(['MR-KR1805', 'Men’s Rush.TV'], ['AAA', 'Japan Gay Scenes']), 'Men’s Rush.TV');
+});
+
+test('レーベルの目安（単独で付いていた件数）で、シリーズ名・出演者名より レーベル、販売サイトより メーカーを選ぶ', () => {
+  const lists = [
+    ...Array(5).fill(['HUNK CHANNEL']), ...Array(4).fill(['GET-film']), ...Array(6).fill(["Men's Rush.TV"]),
+    ...Array(3).fill(['KO BEAST']), ...Array(3).fill(['KO TUBE']),
+    ['HUNK CHANNEL', 'オルガズムモード'], ['HUNK CHANNEL', 'オルガズムモード'], ['HUNK CHANNEL', 'Fuji'],
+  ].map(studioCandidates);
+  const rank = studioRank(lists);
+  assert.equal(pickStudio(['HUNK CHANNEL', 'OAV1379', 'オルガズムモード'], ['Japan Gay Scenes'], rank), 'HUNK CHANNEL', 'シリーズ名');
+  assert.equal(pickStudio(['Fuji', 'Hunk Channel'], ['HUNK CHANNEL'], rank), 'HUNK CHANNEL', '出演者名');
+  assert.equal(pickStudio(['GET-film', 'GT-2705', 'Men’s Rush.TV'], [], rank), 'GET-film', '販売サイトよりメーカー');
+  assert.equal(pickStudio(['01-06-0182-03', 'KO BEAST', 'KO TUBE'], [], rank), 'KO BEAST', '販売サイトよりメーカー');
+  assert.equal(chooseStudio(['オルガズムモード'], rank), 'オルガズムモード', '候補がそれだけなら採る');
+});
+
+test('主要レーベルの別表記を同じキーにまとめる', () => {
+  const same = [['G@MES', 'GAMES'], ['西麻布撮影所', 'Nishiazabu Film Studio'], ['KO 裸王 RAOH', 'KO RAOH'], ["Men's Beraker", 'Men’s Breaker'],
+    ['BOY STUIDO', 'BOY studio'], ['BRAVO-JAPAN', 'BRAVO!'], ['プリズム', 'Prism'], ['HUNK オリジナル', 'Hunk Channel'], ['CK-Download', 'CK DOWNLOAD'],
+    ['TRANCE Video', 'TRANCE-VIDEO'], ['STR8 BOYS', 'STR8BOYS'], ['MENS CAMP', 'Men’s Camp']];
+  for (const [a, b] of same) assert.equal(studioKey(a), studioKey(b), `${a} / ${b}`);
+  assert.notEqual(studioKey('HUNK VIDEO'), studioKey('HUNK CHANNEL'));
+  assert.notEqual(studioKey('COAT'), studioKey('COAT WEST'));
+});
+
+test('名前と年齢（涼真-RYOMA-19歳）は品番にしない。CH-00541 のような品番は拾う', () => {
+  assert.equal(extractCode('あの大人気巨根カコカワモデル涼真-RYOMA-19歳が某ネカフェで'), null);
+  assert.equal(extractCode('人気モデルMASAKI-20歳の生アナル'), null);
+  assert.equal(extractCode('x', ['CH-00541']), 'CH-00541');
+  assert.equal(extractCode('Chapter-02 night'), null);
+  assert.equal(extractCode('x', ['COAT2004']), 'COAT-2004', '大文字の接頭辞なら年に見える番号も品番');
+});
+
+test('分割番号（GDSR-002-1 / -2、SILK-207-1）は別の品番にする。GT-2720_DL の付記は外す', () => {
+  assert.equal(extractCode('GDSR-002-1 – 淫父蕩子／用騷穴報答爸爸養育之恩'), 'GDSR-002-1');
+  assert.notEqual(groupKey(extractCode('GDSR-002-2 – x'), 'x', '1'), groupKey(extractCode('GDSR-002-1 – y'), 'y', '2'));
+  assert.equal(extractCode('SILK-207-1 x'), 'SILK-207-1');
+  assert.equal(extractCode('GT-2720_DL 逆ハーレム'), 'GT-2720');
+  assert.equal(stripCode('GT-2720_DL 逆ハーレム', 'GT-2720'), '逆ハーレム');
+  assert.equal(extractCode('【GT-2720】逆ハーレム'), 'GT-2720');
+});
+
+test('タイトル先頭の掲載元独自の番号（COCO566-02 / 01-26-0013-02 / VDGBXX0466_001 / FC2-PPV）を品番にして外す', () => {
+  for (const [t, c, rest] of [
+    ['COCO566-02 – 〈飛貴〉人生初アナルSEX', 'COCO566-02', '〈飛貴〉人生初アナルSEX'],
+    ['01-26-0013-02 – 激しい交尾', '01-26-0013-02', '激しい交尾'],
+    ['VDGBXX0466_001 – 猛×翔大', 'VDGBXX0466_001', '猛×翔大'],
+    ['ORWEMA040 – No.040 人気モデル', 'ORWEMA040', 'No.040 人気モデル'],
+    ['FC2-PPV-1365684 – 筋肉', 'FC2-PPV-1365684', '筋肉'],
+  ]) {
+    assert.equal(extractCode(t), c, t);
+    assert.equal(stripCode(t, c), rest, t);
+  }
+  assert.equal(extractCode('2024 – 総集編'), null);
+  assert.equal(extractCode('MB-BYGKI – 数字のない番号'), null);
+});
+
+test('FC2 の番号は書き方（FC4468205 / FC2-PPV-4468205）が違っても同じ品番にする', () => {
+  assert.equal(extractCode('x', ['FC2', 'FC4468205']), 'FC2-PPV-4468205');
+  assert.equal(normalizeCode(extractCode('x', ['FC4468205'])), normalizeCode(extractCode('FC2-PPV-4468205 – x')));
+  assert.equal(stripCode('FC2PPV4468205 x', 'FC2-PPV-4468205'), 'x');
+});
+
+const post = (key, siteId, rawTitle, tags) => {
+  const code = extractCode(rawTitle, tags);
+  const title = stripCode(rawTitle, code);
+  return { key, siteId, code, title, tags, group: groupKey(code, title, key) };
+};
+const together = (m, a, b) => m.get(a) === m.get(b);
+
+test('統合: 品番のない投稿は、同じタイトルの品番付きの投稿に合流する', () => {
+  const m = clusterPosts([
+    post('1:1', 1, 'エロ過ぎ!!生突きされ泣き喘ぐ18歳の割れ目にザーメン', ["MEN'S RUSH.TV"]),
+    post('4:1', 4, 'MR-KR2348 – エロ過ぎ!!生突きされ泣き喘ぐ18歳の割れ目にザーメン', ['Men’s Rush.TV', 'MR-KR2348']),
+  ]);
+  assert.ok(together(m, '1:1', '4:1'));
+  assert.equal(m.get('1:1'), 'code:MRKR2348');
+});
+
+test('統合: 別の番号のタグ（G-BOT の VDTWXX0033 と BOT-0346）が一致すればまとめる', () => {
+  const m = clusterPosts([
+    post('1:1', 1, 'デカマラ若リーマン、ゴーグルマンに癒してもらう!', ['G-BOT', 'G-Bot', 'VDTWXX0033']),
+    post('3:1', 3, 'BOT-0346 – デカマラ若リーマン、ゴーグルマンに癒してもらう！ほか', ['BOT-0346', 'G-BOT', 'VDTWXX0033']),
+    post('1:2', 1, 'FC2 の作品', ['FC2', 'FC3478284']),
+    post('4:2', 4, 'FC2-PPV-3478284 – 別サイトでのタイトル', ['FC2-PPV-3478284', 'ONA Collection おなコレ']),
+  ]);
+  assert.ok(together(m, '1:1', '3:1'));
+  assert.ok(together(m, '1:2', '4:2'));
+});
+
+test('統合: 同じ品番でも、同じサイトにタイトルの違う投稿があれば別作品として分ける（BOY-126 の番号の使い回し）', () => {
+  const m = clusterPosts([
+    post('4:160797', 4, 'BOY-126 – 再編集！巨根！高身長のイケメンが電マで女子をガッツリ攻める！', ['BOY studio', 'BOYST0126']),
+    post('4:48849', 4, 'BOY-126 – 爽やかイケメンを逆ナンパ！！', ['BOY studio', 'BOY-126']),
+    post('1:22903', 1, '再編集!巨根!高身長のイケメンが電マで女子をガッツリ攻める!', ['BOY STUDIO', 'BOY-126']),
+  ]);
+  assert.ok(together(m, '4:160797', '1:22903'));
+  assert.ok(!together(m, '4:48849', '1:22903'));
+  assert.equal(new Set(m.values()).size, 2, '統合キーが重ならない');
+});
+
+test('統合: 同じタイトルで販売元ごとに番号が違うもの（CAPY-473 / KPP-0473）はまとめ、同じサイトで番号が違うもの（シリーズの各回）はまとめない', () => {
+  const m = clusterPosts([
+    post('1:1', 1, '初登場!!小麦肌の男前【覇瑠真】20歳!!でかプリ尻', ['Hunk Channel', 'KPP-0473']),
+    post('4:1', 4, 'CAPY-473 – 初登場!!小麦肌の男前【覇瑠真】20歳!!でかプリ尻', ['CAPY-473', 'カピバラワークス']),
+    post('3:1', 3, 'ACST034 – REITOのハメ撮りジャーニー', ['Acceed', 'ACST034']),
+    post('3:2', 3, 'ACST036 – REITOのハメ撮りジャーニー', ['Acceed', 'ACST036']),
+    post('4:2', 4, 'ACST036 – REITOのハメ撮りジャーニー', ['Acceed', 'ACST036']),
+  ]);
+  assert.ok(together(m, '1:1', '4:1'));
+  assert.ok(!together(m, '3:1', '3:2'));
+  assert.ok(together(m, '3:2', '4:2'));
+});
+
+test('統合: 短い英語のタイトル（Raw Passion）は、スタジオが同じときだけまとめる', () => {
+  const m = clusterPosts([
+    post('3:1', 3, 'Raw Passion', ['Chaosmen']),
+    post('3:2', 3, 'Raw Passion', ['Lucas Entertainment']),
+    post('3:3', 3, 'Raw Passion', ['Lucas Entertainment']),
+    post('4:1', 4, 'Introducing Kurosuke', ['Introducing Kurosuke', 'japanboyz']),
+    post('1:1', 1, 'Introducing Kurosuke', ['JAPANBOYZ', 'JapanBoyz']),
+  ]);
+  assert.ok(!together(m, '3:1', '3:2'));
+  assert.ok(together(m, '3:2', '3:3'));
+  assert.ok(together(m, '4:1', '1:1'));
+});
+
+test('統合に使う品番: タイトルの品番と、品番だけのタグすべて', () => {
+  assert.deepEqual(codesOf('雄穴中出し 24', ['G@MES', 'GAMS847', 'WIG-357']).sort(), ['GAMS847', 'WIG357']);
+  assert.deepEqual(codesOf('x', ['FC1900097', 'NPR-0036'], 'NPR-0036').sort(), ['FC2PPV1900097', 'NPR0036']);
 });
