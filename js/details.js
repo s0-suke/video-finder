@@ -2,9 +2,10 @@
 //
 // 公開する関数（detail.js / main.js から使う。名前と引数は変えないこと）
 //   init()                                        起動時に 1 回呼ばれる
-//   mountDetails(container, video, { onTag, onStudio })
+//   mountDetails(container, video, { onTag, onStudio, onActor })
 //       詳細シートの container に、説明文・画像・出演者/ジャンルなどを非同期で描画する。
-//       タグ的なものを押したら onTag(文字列) を、スタジオを押したら onStudio(studioKey) を呼ぶ。
+//       タグ的なものを押したら onTag(文字列) を、スタジオを押したら onStudio(studioKey) を、
+//       出演者を押したら onActor(名前, 名前で検索するときの語) を呼ぶ（なければ onTag）。
 //
 // 情報源
 //   1. otokoki.net（WordPress。CORS 可）… 品番 → タイトルの順に検索し、品番またはタイトルの一致を確かめてから使う。
@@ -33,7 +34,7 @@ const JUNK_IMAGE = /favicon|vidara|firestream|dood|streamtape|mixdrop|filemoon|\
 
 export function init() {}
 
-export function mountDetails(container, video, { onTag, onStudio } = {}) {
+export function mountDetails(container, video, { onTag, onStudio, onActor } = {}) {
   if (!container || !video) return;
   container.innerHTML = skeletonHTML();
   container.classList.add('dt-root');
@@ -45,7 +46,7 @@ export function mountDetails(container, video, { onTag, onStudio } = {}) {
   const update = () => {
     if (oto === undefined || (oto === null && src === undefined)) return;
     try {
-      render(container, video, merge(video, oto, src || [], pre), { onTag, onStudio });
+      render(container, video, merge(video, oto, src || [], pre), { onTag, onStudio, onActor });
     } catch (e) {
       console.warn('details:', e);
       container.innerHTML = '';
@@ -136,7 +137,7 @@ function skeletonHTML() {
 const SHOTS_FOLDED = 8; // 画像がこれより多いときは、この枚数まで出して残りは「すべて表示」で広げる（css/details.css の nth-child(n+9) と合わせる）
 const dropped = new WeakMap(); // container -> 読めなかった画像の URL（描き直しても出さない）
 
-function render(container, video, info, { onTag, onStudio }) {
+function render(container, video, info, { onTag, onStudio, onActor }) {
   const { description, images, groups, link } = info;
   const bad = dropped.get(container) || new Set();
   dropped.set(container, bad);
@@ -207,6 +208,7 @@ function render(container, video, info, { onTag, onStudio }) {
         const k = studioKey(name);
         if (state.studios.some((s) => s.key === k)) return onStudio(k);
       }
+      if (group === '出演者' && onActor) return onActor(name, searchQuery(name));
       if (onTag) onTag(group === '出演者' ? searchQuery(name) : tagQuery(name));
     }
   };

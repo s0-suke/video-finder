@@ -7,7 +7,7 @@ import { $, esc, fmtDate, toast } from '../util.js';
 
 // カード用の短い日付（今年なら「11/04」、それ以外は「2021/05/23」）
 const shortDate = (d) => (d && d.startsWith(String(new Date().getFullYear())) ? d.slice(5, 10).replace('-', '/') : fmtDate(d));
-import { state, on, isNew } from '../data.js';
+import { state, on, emit, isNew } from '../data.js';
 import { crawl, collect } from '../crawler.js';
 import { isFav, favAddedAt, toggleFav } from '../favorites.js';
 import { viewedAt } from '../history.js';
@@ -23,12 +23,14 @@ const CHIP_STUDIOS = 15;
 // view: '' = すべて / 'new' = 新着 / 'fav' = お気に入り / 'history' = 履歴
 const saved = (() => { try { return JSON.parse(localStorage.getItem('filters3') || '{}'); } catch { return {}; } })();
 // dateBy: 'post' = 各サイトの掲載日 / 'release' = 元動画の発売日（目安。release.js。推定した日付も同じように並べ、カードでは「頃」を付ける）
-export const filters = { q: '', studio: '', site: '', sort: 'new', dateBy: 'post', view: '', hideNoThumb: false, ...saved };
+export const filters = { q: '', studio: '', site: '', sort: 'new', dateBy: 'post', view: '', hideNoThumb: false, ...saved, actor: '' };
+// 出演者で絞り込んでいるときの動画の key（actor.js が otokoki から探す。起動し直したら外れる）
+let actorKeys = new Set();
 let filtered = [];
 let shown = 0;
 
 export function saveFilters() {
-  try { localStorage.setItem('filters3', JSON.stringify(filters)); } catch {}
+  try { localStorage.setItem('filters3', JSON.stringify({ ...filters, actor: '' })); } catch {}
   $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new' || filters.dateBy !== 'post' || filters.hideNoThumb));
 }
 
@@ -50,6 +52,7 @@ function applyFilters() {
     (!filters.studio || v.studioKey === filters.studio) &&
     (!siteId || v.siteIds.has(siteId)) &&
     (!filters.hideNoThumb || v.thumb) &&
+    (!filters.actor || actorKeys.has(v.key)) &&
     matches(v, words));
   if (view === 'history') filtered.sort((a, b) => viewedAt(b.key) - viewedAt(a.key));
   else if (view === 'fav') filtered.sort((a, b) => favAddedAt(b.key) - favAddedAt(a.key));
@@ -108,6 +111,7 @@ export function render(reset = true) {
   $('#grid').insertAdjacentHTML('beforeend', next.map((v, k) => cardHTML(v, shown + k)).join(''));
   shown += next.length;
   renderMeta();
+  if (reset) emit('listrender'); // ホームの「最近見た動画」（continue.js）が出し分ける
   $('#list-state').innerHTML = filtered.length
     ? ''
     : activeConditions().some((c) => !c.order) ? '該当する動画がありません<div class="btn-row" style="justify-content:center"><button class="btn" data-clear="all">すべての条件を外す</button></div>'
@@ -148,6 +152,7 @@ const VIEW_LABEL = { '': '', new: '新着', fav: 'お気に入り', history: '�
 // 効いている条件（タブとスタジオ以外）。件数の横に × 付きで出し、押すと外せる
 function activeConditions() {
   const c = [];
+  if (filters.actor) c.push({ id: 'actor', label: `出演: ${filters.actor}` });
   if (filters.q) c.push({ id: 'q', label: `“${filters.q}”` });
   // 並び順はお気に入り・履歴では効かない（追加順・視聴順で並ぶ）ので出さない
   const sorted = filters.view !== 'fav' && filters.view !== 'history';
@@ -167,7 +172,7 @@ function renderMeta() {
 }
 
 function clearCondition(id) {
-  const reset = { q: '', dateBy: 'post', sort: 'new', site: '', hideNoThumb: false, studio: '' };
+  const reset = { q: '', dateBy: 'post', sort: 'new', site: '', hideNoThumb: false, studio: '', actor: '' };
   if (id === 'all') Object.assign(filters, reset);
   else filters[id] = reset[id];
   if (id === 'q' || id === 'all') { $('#q').value = ''; $('#q-clear').style.display = 'none'; }
@@ -181,6 +186,7 @@ export function setView(view) {
   saveFilters();
   renderChips();
   render();
+  dispatchEvent(new Event('viewchange')); // タブバーの表示を合わせる（tabbar.js）
 }
 
 // ---- 最近の検索 ----
@@ -213,6 +219,18 @@ export function setQuery(q) {
   saveFilters();
   $('#q-clear').style.display = q ? 'block' : 'none';
   render();
+}
+
+// 出演者の作品だけにする（検索語・スタジオは外す。ほかのタブにいたらホームに戻す）
+export function setActor(name, keys) {
+  actorKeys = keys;
+  Object.assign(filters, { actor: name, q: '', studio: '', view: '' });
+  $('#q').value = '';
+  $('#q-clear').style.display = 'none';
+  saveFilters();
+  renderChips();
+  render();
+  dispatchEvent(new Event('viewchange')); // タブバーの表示を合わせる
 }
 
 export function setStudio(key) {

@@ -2,13 +2,13 @@
 
 import { $, toast } from './util.js';
 import { openDB } from './db.js';
-import { loadAll, on } from './data.js';
+import { loadAll, rebuild, on } from './data.js';
 import { crawl, initCrawler, maybeAutoCollect, backfillProgress, repairCodes } from './crawler.js';
 import * as player from './player.js';
 import * as favorites from './favorites.js';
 import * as details from './details.js';
 import * as history from './history.js';
-import { initRelease, collectRelease } from './release.js';
+import { initRelease, loadRelease, collectRelease } from './release.js';
 import * as features from './features.js';
 import { feature } from './features.js';
 import * as version from './version.js';
@@ -17,6 +17,7 @@ import { initList, render, renderChips, saveFilters, dropStaleFilters } from './
 import { openFilters } from './ui/filters.js';
 import { initSettings, openSettings } from './ui/settings.js';
 import { initTabbar } from './ui/tabbar.js';
+import { initContinue } from './ui/continue.js';
 
 function route() {
   const settings = location.hash === '#settings';
@@ -45,7 +46,9 @@ function installTip() {
 
 async function boot() {
   await openDB();
-  await loadAll();
+  // 投稿と発売日の対応表を読んでから、一覧を 1 回だけ作る（6 万件の作り直しは iPhone で 1 秒前後かかる）
+  await Promise.all([loadAll(), loadRelease()]);
+  rebuild();
   await initCrawler();
   features.init();
   await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease()]);
@@ -55,6 +58,7 @@ async function boot() {
   initList();
   initSettings();
   initTabbar();
+  initContinue();
   $('#filter-btn').onclick = openFilters;
   on('progress', () => {
     $('#progress').classList.toggle('on', crawl.running);

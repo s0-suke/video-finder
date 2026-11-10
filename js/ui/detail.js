@@ -20,6 +20,7 @@ import { releaseSpan, releaseLabel } from '../release.js';
 import { feature } from '../features.js';
 import { openSheet, closeSheet, miniPlayer, expandMini, closeMini } from './sheet.js';
 import { setQuery, setStudio } from './list.js';
+import { showActor } from '../actor.js';
 
 const RELATED = 12;
 
@@ -121,6 +122,7 @@ export function openDetail(video, opts = {}) {
   mountDetails(el.querySelector('[data-role="details"]'), video, {
     onTag: (t) => { closeSheet(); setQuery(t); },
     onStudio: (key) => { closeSheet(); setStudio(key); },
+    onActor: (name, q) => { closeSheet(); showActor(name, q); },
   });
 
   const main = el.querySelector('.play-main');

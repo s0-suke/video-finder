@@ -315,3 +315,14 @@ details.more[open] summary { margin-bottom: 4px; }
 .version-head { display: flex; gap: 8px; align-items: baseline; }
 .version-entry ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--text); }
 .version-entry li { margin: 2px 0; }
+
+/* ホームの「最近見た動画」 */
+.continue { padding: 10px 12px 2px; }
+.continue-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.continue-head .link { font-size: 13px; font-weight: 400; }
+.continue .related { margin: 0 -12px; padding: 0 12px 4px; scroll-padding: 0 12px; }
+.continue .rel { width: 132px; }
+.continue .thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+.continue .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.continue .thumb .ph { height: 100%; display: grid; place-items: center; font-size: 11px; color: var(--muted); padding: 4px; text-align: center; }
+.continue-now { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; }

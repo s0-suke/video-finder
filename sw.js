@@ -40,6 +40,8 @@ const SHELL = [
   './js/ui/filters.js',
   './js/ui/settings.js',
   './js/ui/tabbar.js',
+  './js/ui/continue.js',
+  './js/actor.js',
 ];
 
 self.addEventListener('install', (e) => {

@@ -6,9 +6,18 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.9.0';
+export const VERSION = '1.10.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.10.0',
+    date: '2026-11-10',
+    items: [
+      '詳細の出演者をタップすると、otokoki の出演者ページからその人の出演作を探して一覧に出すようにした（掲載元のタイトル・タグに名前がない作品も見つかる）。条件の × で外せる',
+      'ホームの先頭に「最近見た動画」を横並びで表示（機能のオン/オフで切り替え可）。ミニプレイヤーで再生中の動画には印',
+      '一覧の作り直しを軽くした: 起動時の作り直しを 1 回にまとめ、変わっていない動画は前回の結果を使い回す。収集中の作り直しは少しずつ区切って行い、スクロールやタップが引っかからないようにした',
+    ],
+  },
   {
     version: '1.9.0',
     date: '2026-11-10',

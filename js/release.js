@@ -17,7 +17,7 @@
 // otokoki の収集は crawler.js と同じく、新着側から差分 → 初回の全件取得（途中で止めても続きから）の順。
 
 import * as db from './db.js';
-import { state, rebuild, emit, applyRelease } from './data.js';
+import { state, rebuild, rebuildAsync, emit, applyRelease } from './data.js';
 import { wpGet } from './wp.js';
 import { sleep, decodeEntities, esc, fmtDate } from './util.js';
 import { releaseCode, releaseTitleKey, normalizeCode, ckCodes, parseCkResult } from './matching.js';
@@ -39,12 +39,15 @@ export const release = { running: false, status: null, page: 0, total: 0 };
 const knownIds = new Set();
 const checked = new Map(); // video.key -> 公式の配信日を調べた結果の行（'ck:' の行）
 
-export async function initRelease() {
+// 保存済みの発売日の対応表を読み込む（起動時、最初の作り直しの前に 1 回。main.js）
+export async function loadRelease() {
   for (const r of await db.getAll('release')) {
     knownIds.add(r.id);
     if (r.src === 'official') indexOfficial(r); else index(r);
   }
-  if (state.release.byCode.size || state.release.byTitle.size || state.release.official.size) rebuild();
+}
+
+export async function initRelease() {
   registerSettingsSection({ id: 'release', title: '発売日', render: renderSection });
 }
 
@@ -207,7 +210,7 @@ async function crawlPages(start, { stopWhenKnown, track, maxPage = Infinity }) {
     }
     await db.putAll('release', rows);
     if (track) await db.kvSet('releaseBackfillPage', page);
-    if (page % 40 === 0) { rebuild(); emit('data'); } // 全件取得中も、ときどき並び順に反映する
+    if (page % 40 === 0) rebuildAsync().then((ok) => { if (ok) emit('data'); }); // 全件取得中も、ときどき並び順に反映する
     if (stopWhenKnown && known === rows.length) break;
     page++;
     await sleep(PAGE_DELAY_MS);

@@ -12,6 +12,7 @@ const DEFS = [
   { id: 'history', label: '視聴履歴', note: '履歴タブと「視聴済み」の印。オフにすると記録もしない' },
   { id: 'related', label: '同じスタジオの動画', note: '詳細の下に横並びで表示' },
   { id: 'swipeNav', label: '前後の動画へ移動', note: '詳細を左右にスワイプ / ‹ 前へ・次へ ›' },
+  { id: 'continueRow', label: '最近見た動画', note: 'ホームの先頭に横並びで表示' },
   { id: 'longPressFav', label: '長押しでお気に入り', note: '一覧のカードを長押し' },
   { id: 'pullRefresh', label: '引っ張って更新', note: '一覧の一番上で下に引っ張ると新着を確認' },
   { id: 'recentSearch', label: '最近の検索', note: '検索欄をタップしたときに候補を出す' },

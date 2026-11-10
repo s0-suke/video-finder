@@ -5,7 +5,7 @@
 // - 通信量を抑えるため本文は取らない（本文は詳細を開いたときに source.js が取る）
 
 import * as db from './db.js';
-import { state, emit, rebuild, saveSite, forgetPost, DEFAULT_SITES } from './data.js';
+import { state, emit, rebuild, rebuildAsync, saveSite, forgetPost, DEFAULT_SITES } from './data.js';
 import { wpGet } from './wp.js';
 import { sleep, decodeEntities } from './util.js';
 import { extractCode, stripCode, groupKey, pickStudio, safeUrl } from './matching.js';
@@ -103,7 +103,7 @@ function scheduleRebuild() {
   // 収集中の作り直しは重いので、間隔をあけてまとめて行う
   // 初回の全件取得中は件数が一気に増え、全件の作り直し（iPhone で 1 秒前後）が頻繁だとスクロールが引っかかるので間隔を広げる
   const backfilling = state.sites.some((s) => s.enabled && !s.backfillDone);
-  rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuild(); emit('data'); }, backfilling ? 15000 : 8000);
+  rebuildTimer = setTimeout(() => { rebuildTimer = null; rebuildAsync().then((ok) => { if (ok) emit('data'); }); }, backfilling ? 15000 : 8000);
 }
 
 async function crawlPages(site, start, { stopWhenKnown, track, maxPage = Infinity, gen }) {

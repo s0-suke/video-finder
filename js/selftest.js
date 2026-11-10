@@ -6,7 +6,8 @@
 
 import { $, $$ } from './util.js';
 import { state } from './data.js';
-import { filters, saveFilters, render, renderChips } from './ui/list.js';
+import { filters, saveFilters, render, renderChips, setActor } from './ui/list.js';
+import { recentKeys } from './history.js';
 import { isSheetOpen, miniPlayer } from './ui/sheet.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -167,6 +168,8 @@ export async function runSelftest() {
     await back();
     assert(await until(() => miniPlayer() && !isSheetOpen(), 2000), 'ミニプレイヤーにならない');
     assert(miniPlayer().querySelector('.hero iframe') === f, 'プレイヤーが作り直された');
+    // 縮むアニメーションを終わらせてから測る（画面が裏にあるとアニメーションが進まないため）
+    for (const a of miniPlayer().getAnimations()) a.finish();
     const r = miniPlayer().getBoundingClientRect(), dock = $('#dock').getBoundingClientRect();
     assert(r.bottom <= dock.top + 1 && r.height < 100, `位置・大きさがおかしい（bottom ${r.bottom} / タブバー ${dock.top}）`);
     // 別の動画の詳細を開いて閉じても、ミニプレイヤーは残る
@@ -181,6 +184,35 @@ export async function runSelftest() {
     assert(await until(() => miniPlayer(), 2000), '2 回目にミニプレイヤーにならない');
     miniPlayer().querySelector('.mini-close').click(); await wait(300);
     assert(!miniPlayer() && !$('#mini') && !document.body.classList.contains('has-mini'), '× で終わらない');
+  });
+
+  await check('出演者で絞り込み、条件チップで外せる', async () => {
+    const vs = state.videos.slice(0, 3);
+    setActor('テスト出演者', new Set(vs.map((v) => v.key)));
+    await wait(300);
+    assert($$('#grid .card').length === vs.length, `件数が合わない（${$$('#grid .card').length}）`);
+    const cond = $('#meta .cond[data-clear="actor"]');
+    assert(cond && cond.textContent.includes('テスト出演者'), '出演の条件チップがない');
+    assert($('#tabbar [data-tab=""]').classList.contains('on'), 'ホームのタブが選ばれていない');
+    cond.click(); await wait(300);
+    assert(!filters.actor && $$('#grid .card').length > vs.length, '外れない');
+    assert(!JSON.parse(localStorage.getItem('filters3') || '{}').actor, '出演者の絞り込みが保存されている');
+  });
+
+  await check('ホームに最近見た動画が出て、タップで詳細が開く', async () => {
+    const keys = recentKeys().filter((k) => state.byKey.has(k));
+    if (!keys.length) return '視聴履歴がない（省略）';
+    tab(''); await wait(300);
+    const row = $('#continue');
+    assert(row && !row.classList.contains('hidden'), '行が出ない');
+    assert(row.querySelectorAll('[data-i]').length === Math.min(keys.length, 12), '件数が合わない');
+    row.querySelector('[data-i="0"]').click();
+    assert(await until(() => isSheetOpen()), 'シートが開かない');
+    assert($('#sheet').dataset.key === keys[0], '違う動画が開いた');
+    await back();
+    tab('fav'); await wait(300);
+    assert(row.classList.contains('hidden'), 'お気に入りタブでも出ている');
+    tab(''); await wait(300);
   });
 
   await check('想定外の例外が出ていない', () => {

@@ -46,6 +46,7 @@ export function initTabbar() {
     renderTabs();
   };
   addEventListener('hashchange', renderTabs);
+  addEventListener('viewchange', renderTabs); // 一覧側でタブを切り替えたとき（list.js の setView / setActor）
   on('data', renderTabs);
   on('features', renderTabs);
 

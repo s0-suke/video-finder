@@ -28,7 +28,13 @@ function infoOf(p) {
   }
   return c;
 }
-export const forgetPost = (p) => { infoCache.delete(p); };
+export const forgetPost = (p) => { infoCache.delete(p); lastInput = null; groupMemo.clear(); buildSeq++; };
+
+// 前回の rebuild の材料（投稿が 1 件も変わっていなければ、まとめ方とスタジオの順位をそのまま使う）
+let lastInput = null; // { posts, sites, groupOf, rank }
+// 動画ごとの重い材料（タグ・検索用の文字列など）。まとまった投稿とスタジオが前回と同じなら使い回す（統合キー → 材料）
+const groupMemo = new Map();
+const sameRows = (a, b) => a.length === b.length && a.every((r, i) => r === b[i]);
 function studioCandsOf(p) {
   const c = infoOf(p);
   return c.cands || (c.cands = studioCandidates([...c.tags, p.studio]));
@@ -143,7 +149,6 @@ export async function loadAll() {
   }
   if (fixed.length) await db.putAll('posts', fixed);
   if (migrate) await db.kvSet(MIGRATE_KEY, MIGRATE_VERSION);
-  rebuild();
 }
 
 // 分割番号の付いていない品番（GDSR-002。GDSR-002-1 や COCO566-02 は対象外）
@@ -205,12 +210,43 @@ function displayTitle(title, code) {
   return t;
 }
 
+// 一覧の作り直し。
+// rebuild() はその場で最後まで行う。rebuildAsync() は少しずつ区切って進め、合間に画面の操作を受け付ける
+// （収集中の定期的な作り直しで、スクロールやタップが引っかからないように）。
+// 途中で別の作り直しが始まったり投稿が書き換えられたりしたら、古いほうの結果は捨てる（戻り値 false）
+let buildSeq = 0;
+
 export function rebuild() {
+  const g = build();
+  let r;
+  while (!(r = g.next()).done);
+  return r.value;
+}
+
+const SLICE_MS = 12;
+const nextTask = () => new Promise((res) => setTimeout(res, 0));
+export async function rebuildAsync() {
+  const g = build();
+  for (;;) {
+    const end = performance.now() + SLICE_MS;
+    let r;
+    while (!(r = g.next()).done) if (performance.now() > end) break;
+    if (r.done) return r.value;
+    await nextTask();
+  }
+}
+
+function* build() {
+  const seq = ++buildSeq;
   const enabled = new Set(state.sites.filter((s) => s.enabled).map((s) => s.id));
   const siteName = Object.fromEntries(state.sites.map((s) => [s.id, s.name]));
   const posts = [...state.posts.values()].filter((p) => enabled.has(p.siteId));
+  // 投稿が前回と同じ（発売日の対応表が増えただけなど）なら、まとめ方とスタジオの順位を作り直さない
+  const sitesKey = [...enabled].sort().join(',');
+  const same = lastInput && lastInput.sites === sitesKey && sameRows(posts, lastInput.posts);
   // 品番（別の書き方・別の番号も含む）とタイトルで投稿をまとめる（matching.js の clusterPosts）
-  const groupOf = clusterPosts(posts.map(infoOf));
+  const groupOf = same ? lastInput.groupOf : clusterPosts(posts.map(infoOf));
+  yield;
   const groups = new Map();
   for (const p of posts) {
     const k = groupOf.get(p.key) || p.group;
@@ -221,47 +257,69 @@ export function rebuild() {
 
   // スタジオ名: レーベルらしさ（単独で付いていた投稿の数）を数え、投稿ごと・動画ごとに選び直す。
   // 表記ゆれはまとめ、いちばん多い表記を表示名にする
-  const rank = studioRank(posts.map(studioCandsOf));
+  const rank = same ? lastInput.rank : studioRank(posts.map(studioCandsOf));
+  lastInput = { posts, sites: sitesKey, groupOf, rank };
   const studioOf = (p) => chooseStudio(studioCandsOf(p), rank);
   const studioNames = new Map(); // key -> Map(name -> count)
   const videos = [];
+  const memoUsed = new Set();
+  let n = 0;
   for (const [key, rows] of groups) {
+    if (++n % 400 === 0) yield;
     rows.sort((a, b) => (b.thumb ? 1 : 0) - (a.thumb ? 1 : 0) || (a.date < b.date ? 1 : -1));
     const main = rows[0];
-    const rawTags = [...new Set(rows.flatMap((r) => r.tags))];
     // 投稿ごとのスタジオのうち、メーカーと分かっているもの（販売サイトより絞り込まれたもの）を採る
     const studio = chooseStudio(studioCandidates(rows.map(studioOf).filter(Boolean)), rank);
     const sKey = studio ? studioKey(studio) : null;
-    // 表示用のタグからは、分類タグ・品番だけのタグ・スタジオ名の言い換え（MEN'S RUSH など）を除く。検索には全部使う
-    const tags = rawTags.filter((t) => !isNoiseTag(t) && !codeTag(t) && !(sKey && studioKey(t).length >= 4 && sKey.startsWith(studioKey(t))));
+    // まとまった投稿とスタジオが前回と同じなら、タグ・検索用の文字列などを使い回す
+    let m = groupMemo.get(key);
+    if (!m || m.studio !== studio || !sameRows(rows, m.rows)) {
+      const rawTags = [...new Set(rows.flatMap((r) => r.tags))];
+      m = {
+        rows, // groups の配列は rebuild ごとに作り直すので、そのまま持っておける
+        studio,
+        // 表示用のタグからは、分類タグ・品番だけのタグ・スタジオ名の言い換え（MEN'S RUSH など）を除く。検索には全部使う
+        tags: rawTags.filter((t) => !isNoiseTag(t) && !codeTag(t) && !(sKey && studioKey(t).length >= 4 && sKey.startsWith(studioKey(t)))),
+        date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
+        siteIds: new Set(rows.map((r) => r.siteId)),
+        // どこかのサイトで最初に見つかった時刻（初回の全件取得分は 0 = NEW にしない）
+        seenAt: rows.reduce((t, r) => Math.min(t, r.seenAt || 0), Infinity),
+        hay: [...rows.map(hayOf), (main.code || '').toLowerCase(), (studio || '').normalize('NFKC').toLowerCase()].join('\n'),
+      };
+      groupMemo.set(key, m);
+    }
+    memoUsed.add(key);
+    const { tags } = m;
     if (sKey) {
-      let m = studioNames.get(sKey);
-      if (!m) studioNames.set(sKey, (m = new Map()));
-      m.set(studio, (m.get(studio) || 0) + 1);
+      let n = studioNames.get(sKey);
+      if (!n) studioNames.set(sKey, (n = new Map()));
+      n.set(studio, (n.get(studio) || 0) + 1);
     }
     videos.push({
       key,
       code: main.code,
       title: displayTitle(main.title, main.code), // 保存済みのタイトルに品番が残っていても表示では外す
       thumb: main.thumb,
-      date: rows.reduce((d, r) => (r.date > d ? r.date : d), ''),
+      date: m.date,
       // 発売日（公式の配信日 → otokoki の掲載日の順）と出どころ。照合できなければ空（下で推定する）。掲載日では代用しない
       ...releaseFields(key, main.code, rows),
       studio,
       studioKey: sKey,
       tags,
-      siteIds: new Set(rows.map((r) => r.siteId)),
-      // どこかのサイトで最初に見つかった時刻（初回の全件取得分は 0 = NEW にしない）
-      seenAt: rows.reduce((t, r) => Math.min(t, r.seenAt || 0), Infinity),
+      siteIds: m.siteIds,
+      seenAt: m.seenAt,
       // 投稿はコピーせず参照で持つ（6 万件を毎回コピーしないため。siteName はここで付けておく）
       sources: rows.map((r) => { r.siteName = siteName[r.siteId] || '?'; return r; }),
-      hay: [...rows.map(hayOf), (main.code || '').toLowerCase(), (studio || '').normalize('NFKC').toLowerCase()].join('\n'),
+      hay: m.hay,
     });
   }
+  // 今回なくなった動画の材料は捨てる
+  if (groupMemo.size > memoUsed.size) for (const k of groupMemo.keys()) if (!memoUsed.has(k)) groupMemo.delete(k);
   videos.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   // 発売日が分からない動画は、同じレーベルの前後の品番の既知の発売日から推定する（推定どうしを根拠にはしない）
   estimateIndex = buildEstimateIndex(videos.filter((v) => v.releaseKnown && v.code).map((v) => ({ code: v.code, date: v.release })));
+  yield;
   for (const v of videos) if (!v.releaseKnown) Object.assign(v, estimateFields(v.code, v.sources));
 
   const studios = [...studioNames].map(([key, names]) => {
@@ -272,10 +330,12 @@ export function rebuild() {
   const displayName = new Map(studios.map((s) => [s.key, s.name]));
   for (const v of videos) if (v.studioKey) v.studio = displayName.get(v.studioKey);
 
+  if (seq !== buildSeq) return false; // 途中で新しい作り直しが始まった
   state.videos = videos;
   state.byKey = new Map(videos.map((v) => [v.key, v]));
   movedIndex = null;
   state.studios = studios;
+  return true;
 }
 
 // 動画を構成している投稿の key（並びをそろえる）。お気に入り・履歴の行に残し、findMoved の付け替えに使う
