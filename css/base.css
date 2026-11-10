@@ -263,6 +263,16 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 .picker-row { display: flex; justify-content: space-between; align-items: center; width: 100%; background: none; border: 0; border-bottom: 1px solid var(--border); padding: 12px 4px; text-align: left; font-size: 15px; }
 .picker-row.on { color: var(--accent); font-weight: 600; }
 .picker-n { color: var(--muted); font-size: 12px; }
+/* スタジオ一覧の親子（親の下に子を並べる） */
+.picker-item { display: flex; align-items: stretch; }
+.picker-item .picker-row { flex: 1; width: auto; min-width: 0; }
+.picker-item.d1 { padding-left: 18px; }
+.picker-item.d2 { padding-left: 36px; }
+.picker-toggle { flex: none; width: 30px; background: none; border: 0; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 13px; padding: 0; }
+.picker-toggle.open span { display: inline-block; transform: rotate(90deg); }
+.picker-kids { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.picker-via { color: var(--muted); font-size: 12px; }
+.kv .crumb { color: var(--muted); font-size: 13px; }
 
 /* ---- 詳細シート: 高さ一定・下端に操作バー ---- */
 .sheet.tall { height: 92vh; padding-bottom: 0; }

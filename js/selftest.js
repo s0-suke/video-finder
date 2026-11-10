@@ -153,6 +153,37 @@ export async function runSelftest() {
     filters.studio = ''; saveFilters(); renderChips(); render();
   });
 
+  await check('スタジオの親子: 一覧で親の下に子が出て、親を選ぶと子の動画も数えられ、子を選ぶと子だけになる', async () => {
+    const parent = state.studios.find((s) => s.children.length && s.total > s.count);
+    if (!parent) return '子のあるスタジオがない（省略。?dev は各サイト 1 ページ目だけなので、収集済みのデータで試す）';
+    const childKey = parent.children.find((k) => { const c = state.studios.find((s) => s.key === k); return c && c.count > 0; });
+    assert(childKey, '子に本数がない');
+    const child = state.studios.find((s) => s.key === childKey);
+    // 一覧: 親の行に開閉の印があり、開くと子の行が出る
+    $('#filter-btn').click(); await wait(400);
+    const sel = $('#f-studio');
+    assert(sel && [...sel.options].some((o) => o.value === childKey && o.textContent.includes('└')), '絞り込みの選択肢に子が入れ子で出ない');
+    $('#f-reset').click(); await wait(500);
+    filters.studio = ''; saveFilters(); renderChips(); render();
+    const more = $('#chips [data-chip="more"]');
+    if (more) {
+      more.click(); await wait(400);
+      const tog = $(`.picker-toggle[data-toggle="${parent.key}"]`);
+      if (tog) {
+        tog.click(); await wait(200);
+        assert($(`.picker-row[data-key="${childKey}"]`), '親を開いても子が出ない');
+      }
+      history.back(); await wait(500);
+    }
+    // 絞り込み: 親は子を含む本数、子は子だけ
+    const meta = () => ($('#meta').textContent || '').replace(/,/g, '');
+    filters.studio = parent.key; saveFilters(); renderChips(); render(); await wait(400);
+    assert(meta().includes(String(parent.total)), `親の件数が合わない（${meta()} / ${parent.total}）`);
+    filters.studio = childKey; saveFilters(); renderChips(); render(); await wait(400);
+    assert(meta().includes(String(child.total)), `子の件数が合わない（${meta()} / ${child.total}）`);
+    filters.studio = ''; saveFilters(); renderChips(); render();
+  });
+
   await check('再生中に閉じるとミニプレイヤーになり、タップで戻る・× で終わる', async () => {
     const cards = $$('#grid .card');
     assert(cards.length >= 2, 'カードが足りない');

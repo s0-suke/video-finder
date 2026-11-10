@@ -135,7 +135,12 @@ test('一覧のスタジオ: 品番・大分類は選ばず、シリーズ名よ
   rebuild();
   const by = (code) => state.videos.find((v) => v.code === code);
   assert.equal(by('DT-031').studioKey, 'hunkchannel');
-  assert.equal(by('OAV-1379').studioKey, 'hunkchannel');
+  // オルガズムモードは HUNK CHANNEL の子（studios.js の表）。動画のスタジオは子になり、親（HUNK CHANNEL）の下に並ぶ
+  assert.equal(by('OAV-1379').studio, 'オルガズムモード');
+  const sub = state.studios.find((s) => s.key === by('OAV-1379').studioKey);
+  assert.equal(sub.parent, 'hunkchannel');
+  const hunk = state.studios.find((s) => s.key === 'hunkchannel');
+  assert.equal(hunk.total, hunk.count + sub.total, '親の本数は自分と子の合計');
   assert.equal(by('GT-2705').studioKey, 'getfilm');
   assert.equal(by('GT-2705').sources.length, 2);
   assert.ok(!by('OAV-1379').tags.includes('OAV1379'), '品番だけのタグは表示しない');

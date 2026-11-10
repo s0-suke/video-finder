@@ -166,14 +166,16 @@ test('サイトの大分類（Western Movies / Thai / Japan Gay Scenes）はス�
   assert.equal(pickStudio(['MR-KR1805', 'Men’s Rush.TV'], ['AAA', 'Japan Gay Scenes']), 'Men’s Rush.TV');
 });
 
-test('レーベルの目安（単独で付いていた件数）で、シリーズ名・出演者名より レーベル、販売サイトより メーカーを選ぶ', () => {
+test('レーベルの目安（単独で付いていた件数）で、シリーズ名・出演者名より レーベル、販売サイトより メーカーを選ぶ（表にあるシリーズは子として採る）', () => {
   const lists = [
     ...Array(5).fill(['HUNK CHANNEL']), ...Array(4).fill(['GET-film']), ...Array(6).fill(["Men's Rush.TV"]),
     ...Array(3).fill(['KO BEAST']), ...Array(3).fill(['KO TUBE']),
     ['HUNK CHANNEL', 'オルガズムモード'], ['HUNK CHANNEL', 'オルガズムモード'], ['HUNK CHANNEL', 'Fuji'],
   ].map(studioCandidates);
   const rank = studioRank(lists);
-  assert.equal(pickStudio(['HUNK CHANNEL', 'OAV1379', 'オルガズムモード'], ['Japan Gay Scenes'], rank), 'HUNK CHANNEL', 'シリーズ名');
+  // オルガズムモードは HUNK CHANNEL のオリジナルブランド（親子関係の表 studios.js で HUNK CHANNEL の子）。子が分かっていれば販売サイトより子を採る
+  assert.equal(pickStudio(['HUNK CHANNEL', 'OAV1379', 'オルガズムモード'], ['Japan Gay Scenes'], rank), 'オルガズムモード', '表にあるシリーズ（子）');
+  assert.equal(pickStudio(['HUNK CHANNEL', '未登録のシリーズ'], [], rank), 'HUNK CHANNEL', '表にないシリーズ名は今までどおり販売サイト');
   assert.equal(pickStudio(['Fuji', 'Hunk Channel'], ['HUNK CHANNEL'], rank), 'HUNK CHANNEL', '出演者名');
   assert.equal(pickStudio(['GET-film', 'GT-2705', 'Men’s Rush.TV'], [], rank), 'GET-film', '販売サイトよりメーカー');
   assert.equal(pickStudio(['01-06-0182-03', 'KO BEAST', 'KO TUBE'], [], rank), 'KO BEAST', '販売サイトよりメーカー');

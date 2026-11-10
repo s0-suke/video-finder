@@ -3,6 +3,8 @@
 // 品番（例: MR-KR2387, GT-2720, SUPD-123, OR-COAV001-04, SILK-207-1）。
 // 直後に付く分割番号（-1 / -04 / _001 / -B）は別の動画なので品番に含める。GT-2720_DL のような付記は含めない。
 // 「RYOMA-19歳」のような名前と年齢は品番にしない
+import { tableDepth } from './studios.js'; // 親子関係の表（studios.js と互いに読み込み合うが、表は使うときに作るので問題ない）
+
 export const CODE_RE = /(?<![A-Z0-9])([A-Z]{2,8}-(?:[A-Z]{1,4}-?)?\d{2,6}(?:[-_](?:\d{1,3}|[A-F]))?)(?![A-Z0-9]|[-_]\d|[歳才])/i;
 
 // 品番の形をしているが品番ではない一般的な語（Best-of-2023 / COVID-19 / FullHD-1080 など）
@@ -355,12 +357,15 @@ export function studioKey(name) {
   return k;
 }
 
+// 品番の頭の英字 + 巻数だけのタグ（BIF7・CFT1・SRK3 など。レーベルではなくシリーズの巻）。FC2 は販売サイトの名前なので除く
+const SERIES_CODE = /^(?!FC2$)[A-Z]{2,4}\d{1,2}$/;
+
 // スタジオ名の候補になるタグ・カテゴリ（品番・分類タグ・大分類を除き、表記ゆれは 1 つにまとめる）
 export function studioCandidates(terms) {
   const seen = new Set();
   const out = [];
   for (const t of terms) {
-    if (!t || isNoiseTag(t) || GENERIC_TERM.test(t.trim()) || looksLikeCode(t) || CODE_RE.test(t) || tagCode(t)) continue;
+    if (!t || isNoiseTag(t) || GENERIC_TERM.test(t.trim()) || SERIES_CODE.test(t.trim()) || looksLikeCode(t) || CODE_RE.test(t) || tagCode(t)) continue;
     const k = studioKey(t);
     if (!k || seen.has(k)) continue;
     seen.add(k);
@@ -400,8 +405,9 @@ export function pickStudio(tags, cats = [], rank = null) {
 // studioCandidates の結果からスタジオ名を選ぶ（pickStudio の後半。候補を覚えておいて選び直すときに使う）
 export function chooseStudio(c, rank = null) {
   if (!c.length) return null;
+  let best = null;
   if (rank) {
-    let best = null, bestN = Infinity;
+    let bestN = Infinity;
     for (const t of c) {
       const k = studioKey(t);
       const n = rank.get(k) || 0;
@@ -409,9 +415,23 @@ export function chooseStudio(c, rank = null) {
       const score = PLATFORMS.has(k) ? n + 1e9 : n; // 販売サイトは最後の候補
       if (score < bestN) { best = t; bestN = score; }
     }
-    if (best) return best;
   }
-  return c[0];
+  // 親子関係の表（studios.js）で分かっている子（より絞り込まれたレーベル）を優先する。
+  // 「HUNK CHANNEL + CRUISING」なら、販売サイトではなく G@MES のシリーズ CRUISING を採る。販売サイトは採らない
+  let known = null, knownDepth = -1;
+  for (const t of c) {
+    const k = studioKey(t);
+    if (PLATFORMS.has(k)) continue;
+    const d = tableDepth(k, t);
+    if (d > knownDepth) { known = t; knownDepth = d; }
+  }
+  if (best) {
+    // 掲載元で単独のレーベルと確かめられたもの（rank）が表にもあるときだけ、表のより深い子に置き換える
+    const bd = tableDepth(studioKey(best), best);
+    return bd >= 0 && knownDepth > bd ? known : best;
+  }
+  // 表で分かっているのが親（深さ 0）だけなら、これまでどおり先頭の候補を採る（表にないレーベルを親に丸めない）
+  return knownDepth > 0 ? known : c[0];
 }
 
 // ---- 発売日の目安（otokoki の記事タイトルとの照合）----

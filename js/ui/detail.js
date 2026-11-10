@@ -71,6 +71,21 @@ function relatedHTML(video) {
 
 // opts.list / opts.index を渡すと、その並びで前後の動画へ移れる。
 // opts.keepBack は「戻る」で開いたとき（戻り先の積み重ねを消さない）
+// スタジオの表示: 親があれば「親 › 子」（どちらも押すとそのスタジオで絞り込む。親を押すと子の動画も出る）
+function studioCrumb(video) {
+  if (!video.studio) return '';
+  const chain = [];
+  const byKey = new Map(state.studios.map((x) => [x.key, x]));
+  for (let k = byKey.get(video.studioKey) && byKey.get(video.studioKey).parent, n = 0; k && n < 4; n++) {
+    const p = byKey.get(k);
+    if (!p) break;
+    chain.unshift(p);
+    k = p.parent;
+  }
+  const link = (key, name) => `<button class="link" data-studio="${esc(key)}">${esc(name)}</button>`;
+  return chain.map((p) => link(p.key, p.name) + '<span class="crumb">›</span>').join('') + link(video.studioKey, video.studio);
+}
+
 export function openDetail(video, opts = {}) {
   if (!video) return;
   // ミニプレイヤーで再生中の動画なら、それを大きく表示する（読み込み直さない）
@@ -92,7 +107,7 @@ export function openDetail(video, opts = {}) {
     <h2>${esc(video.title)}</h2>
     <div class="kv">
       ${video.code ? `<span>${esc(video.code)}</span>` : ''}
-      ${video.studio ? `<button class="link" data-studio="${esc(video.studioKey)}">${esc(video.studio)}</button>` : ''}
+      ${studioCrumb(video)}
       <span>掲載 ${esc(fmtDate(video.date))}</span>
       ${releaseSpan(video)}
     </div>

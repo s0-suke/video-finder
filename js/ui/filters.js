@@ -4,6 +4,7 @@ import { $, esc } from '../util.js';
 import { state } from '../data.js';
 import { openSheet, closeSheet } from './sheet.js';
 import { filters, saveFilters, render, renderChips, reshuffle } from './list.js';
+import { studioRows } from '../studios.js';
 
 export function openFilters() {
   const enabled = state.sites.filter((s) => s.enabled);
@@ -25,7 +26,7 @@ export function openFilters() {
     </div>
     <div class="field"><label>スタジオ</label>
       <select id="f-studio"><option value="">すべて</option>
-        ${state.studios.map((s) => `<option value="${esc(s.key)}" ${filters.studio === s.key ? 'selected' : ''}>${esc(s.name)}（${s.count.toLocaleString()}）</option>`).join('')}
+        ${studioRows(state.studios).map(({ s, depth }) => `<option value="${esc(s.key)}" ${filters.studio === s.key ? 'selected' : ''}>${'　'.repeat(depth)}${depth ? '└ ' : ''}${esc(s.name)}（${s.total.toLocaleString()}）</option>`).join('')}
       </select>
     </div>
     <div class="field"><label>取得元サイト</label>
@@ -67,6 +68,10 @@ export function openFilters() {
 }
 
 // スタジオ一覧（名前で絞り込み、本数の多い順。タップでそのスタジオに絞る）
+// 親（会社・メーカー）の下に子（レーベル）を並べる。親の本数は子を含めた合計で、親を選ぶと子の動画も出る。
+// 探していないときは親だけを並べ、「▸」で子を開く。探しているときは、当てはまる行を親の名前つきで並べる
+const expanded = new Set(); // 開いている親の key（シートを開き直しても覚えておく）
+
 export function openStudioPicker() {
   const el = openSheet(`
     <h2 style="margin-top:0">スタジオ</h2>
@@ -75,18 +80,47 @@ export function openStudioPicker() {
   `);
   const q = el.querySelector('.picker-q');
   const list = el.querySelector('.picker-list');
+  const row = (s, { depth = 0, via = '' } = {}) => {
+    const kids = s.children.length;
+    const open = expanded.has(s.key);
+    const toggle = kids && !via
+      ? `<button class="picker-toggle ${open ? 'open' : ''}" data-toggle="${esc(s.key)}" aria-label="${open ? '閉じる' : '子のスタジオを開く'}"><span>▸</span></button>`
+      : '<span class="picker-toggle gap"></span>';
+    const prefix = via ? `<small class="picker-via">${esc(via)} ›</small> ` : '';
+    const sub = kids ? `<small class="picker-kids">${kids} 件のレーベル</small>` : '';
+    return `<div class="picker-item d${Math.min(depth, 2)}">${toggle}` +
+      `<button class="picker-row ${filters.studio === s.key ? 'on' : ''}" data-key="${esc(s.key)}"><span>${prefix}${esc(s.name)}${sub}</span><span class="picker-n">${s.total.toLocaleString()}</span></button></div>`;
+  };
   const paint = () => {
     const w = q.value.trim().normalize('NFKC').toLowerCase();
-    const rows = state.studios.filter((s) => !w || s.name.normalize('NFKC').toLowerCase().includes(w)).slice(0, 300);
-    list.innerHTML = (filters.studio ? '<button class="picker-row" data-key="">すべてのスタジオ</button>' : '') +
-      rows.map((s) => `<button class="picker-row ${filters.studio === s.key ? 'on' : ''}" data-key="${esc(s.key)}"><span>${esc(s.name)}</span><span class="picker-n">${s.count.toLocaleString()}</span></button>`).join('') +
-      (rows.length ? '' : '<p class="note">見つかりません</p>');
+    const byKey = new Map(state.studios.map((s) => [s.key, s]));
+    let html = filters.studio ? '<button class="picker-row" data-key="">すべてのスタジオ</button>' : '';
+    if (w) {
+      const rows = state.studios.filter((s) => s.name.normalize('NFKC').toLowerCase().includes(w)).slice(0, 300);
+      html += rows.map((s) => row(s, { via: s.parent ? ((byKey.get(s.parent) || {}).name || '') : '' })).join('') +
+        (rows.length ? '' : '<p class="note">見つかりません</p>');
+    } else {
+      // 親から順に。開いている親の子（その子も開いていれば孫）まで出す
+      const walk = (s, depth) => {
+        html += row(s, { depth });
+        if (!expanded.has(s.key)) return;
+        for (const ck of s.children) { const c = byKey.get(ck); if (c) walk(c, depth + 1); }
+      };
+      for (const s of state.studios) if (!s.parent) walk(s, 0);
+    }
+    list.innerHTML = html;
   };
   paint();
   q.addEventListener('input', paint);
   // 開いたらすぐ入力できるようにする（タップの処理の中で focus するので iOS でもキーボードが出る）
   q.focus({ preventScroll: true });
   list.onclick = (e) => {
+    const t = e.target.closest('[data-toggle]');
+    if (t) {
+      const k = t.dataset.toggle;
+      if (expanded.has(k)) expanded.delete(k); else expanded.add(k);
+      return paint();
+    }
     const b = e.target.closest('[data-key]');
     if (!b) return;
     filters.studio = b.dataset.key;

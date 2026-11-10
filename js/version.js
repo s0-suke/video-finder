@@ -6,9 +6,19 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.10.0';
+export const VERSION = '1.11.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.11.0',
+    date: '2026-11-11',
+    items: [
+      'スタジオに親子関係を追加: 会社・メーカー（親）の下にレーベル・シリーズ（子）を並べる。KO COMPANY の下に KO BEAST・KO EROS など、COAT の下に EXFEED・COAT WEST など、G@MES の下に CRUISING・ノンケ激盗撮・のんけ診察室 など。KO-TUBE・CK DOWNLOAD・HUNK CHANNEL・Men\'s Rush.TV・games-video.co.jp の公式の構成で確かめたものだけを入れた',
+      '親を選ぶと、子の動画もすべて出る（子を選ぶと、その子だけ）。ホームのチップは親だけを並べ、スタジオ一覧では「▸」で子を開ける。探すときは親の名前つきで出る。詳細は「親 › 子」の形で、どちらを押しても絞り込める',
+      '「HUNK CHANNEL」「Men\'s Rush.TV」のような販売サイトの名前が付いた動画も、シリーズ・レーベルが分かっているものは、そちらをスタジオにする（CRUISING など）',
+      '「BIF7」「CFT1」のような品番の頭 + 巻数だけのタグを、スタジオとして出さないようにした',
+    ],
+  },
   {
     version: '1.10.0',
     date: '2026-11-10',

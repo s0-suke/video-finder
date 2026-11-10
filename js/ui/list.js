@@ -12,6 +12,7 @@ import { crawl, collect } from '../crawler.js';
 import { isFav, favAddedAt, toggleFav } from '../favorites.js';
 import { viewedAt } from '../history.js';
 import { normalizeCode } from '../matching.js';
+import { descendantKeys } from '../studios.js';
 import { feature } from '../features.js';
 import { isSheetOpen } from './sheet.js';
 import { openDetail } from './detail.js';
@@ -45,11 +46,13 @@ function applyFilters() {
   const words = normalizeQuery(filters.q).split(/\s+/).filter(Boolean);
   const siteId = filters.site ? +filters.site : null;
   const view = filters.view;
+  // スタジオの絞り込みは、選んだスタジオとその子孫（親を選ぶと子の動画も出る）
+  const studioSet = filters.studio ? descendantKeys(state.studios, filters.studio) : null;
   filtered = state.videos.filter((v) =>
     (view !== 'fav' || isFav(v.key)) &&
     (view !== 'history' || viewedAt(v.key)) &&
     (view !== 'new' || isNew(v)) &&
-    (!filters.studio || v.studioKey === filters.studio) &&
+    (!studioSet || studioSet.has(v.studioKey)) &&
     (!siteId || v.siteIds.has(siteId)) &&
     (!filters.hideNoThumb || v.thumb) &&
     (!filters.actor || actorKeys.has(v.key)) &&
@@ -122,8 +125,10 @@ export function render(reset = true) {
 }
 
 export function renderChips() {
-  const top = state.studios.slice(0, CHIP_STUDIOS);
-  // 選択中のスタジオが上位に入っていなくてもチップに出す
+  // チップに並べるのは親のないスタジオ（子は親の下。親は子を含めた本数 total の順）
+  const roots = state.studios.filter((s) => !s.parent);
+  const top = roots.slice(0, CHIP_STUDIOS);
+  // 選択中のスタジオが上位に入っていなくても（子のスタジオのときも）チップに出す
   if (filters.studio && !top.some((s) => s.key === filters.studio)) {
     const cur = state.studios.find((s) => s.key === filters.studio);
     if (cur) top.unshift(cur);

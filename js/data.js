@@ -6,6 +6,7 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
+import { buildStudioTree } from './studios.js';
 import { studioKey, isNoiseTag, studioCandidates, studioRank, chooseStudio, extractCode, isCodeForm, groupKey, isCodeTag, normalizeCode, codesOf, titleKeyOf, titleSimilarity, clusterPosts, releaseTitleKey, plausibleRelease, stripCode, safeUrl } from './matching.js';
 import { buildEstimateIndex, estimateRelease } from './release-estimate.js';
 
@@ -68,7 +69,7 @@ export const state = {
   posts: new Map(), // key -> post
   videos: [], // 統合後（新しい順）
   byKey: new Map(), // video.key -> video
-  studios: [], // { key, name, count }（本数の多い順）
+  studios: [], // { key, name, count（自分の本数）, total（子を含む本数）, parent（親の key。なければ ''）, children（子の key）, virtual（掲載元に単独では付かない親）}（total の多い順）
   // 発売日（release.js が埋める）
   //   official: 公式の配信日（CK DOWNLOAD）。'key:<video.key>' / 'code:<正規化した品番>' -> 日付
   //   byCode / byTitle: otokoki の掲載日（発売日の目安）
@@ -326,15 +327,20 @@ function* build() {
     const [name] = [...names].sort((a, b) => b[1] - a[1])[0];
     return { key, name, count: [...names.values()].reduce((a, b) => a + b, 0) };
   });
-  studios.sort((a, b) => b.count - a.count);
   const displayName = new Map(studios.map((s) => [s.key, s.name]));
   for (const v of videos) if (v.studioKey) v.studio = displayName.get(v.studioKey);
+  // 親子関係（KO COMPANY > KO BEAST など。studios.js）を付ける。親は子を含めた本数（total）で並べる
+  const tree = buildStudioTree(studios);
+  tree.sort((a, b) => b.total - a.total || b.count - a.count);
+  // 親の名前は表の正式な名前になることがある（KO → KO COMPANY）ので、動画の表示名もそれに合わせる
+  const treeName = new Map(tree.map((s) => [s.key, s.name]));
+  for (const v of videos) if (v.studioKey) v.studio = treeName.get(v.studioKey) || v.studio;
 
   if (seq !== buildSeq) return false; // 途中で新しい作り直しが始まった
   state.videos = videos;
   state.byKey = new Map(videos.map((v) => [v.key, v]));
   movedIndex = null;
-  state.studios = studios;
+  state.studios = tree;
   return true;
 }
 
