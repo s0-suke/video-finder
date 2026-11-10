@@ -8,7 +8,6 @@ import { $, $$ } from './util.js';
 import { state } from './data.js';
 import { filters, saveFilters, render, renderChips } from './ui/list.js';
 import { isSheetOpen } from './ui/sheet.js';
-import { isFav } from './favorites.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(fn, ms = 6000) {
@@ -92,16 +91,22 @@ export async function runSelftest() {
   });
 
   await check('詳細を開き、再生ボタン・お気に入り・前後移動が動く', async () => {
-    $('#grid .card').click();
-    assert(await until(() => isSheetOpen()), 'シートが開かない');
+    // お気に入りに入っていない動画で試す（入っている動画で外して入れ直すと、追加日時と並び順が変わってしまう）
+    let opened = false;
+    for (const card of $$('#grid .card').slice(0, 10)) {
+      card.click();
+      assert(await until(() => isSheetOpen()), 'シートが開かない');
+      if ($('#sheet .fav-btn')?.getAttribute('aria-pressed') !== 'true') { opened = true; break; }
+      await back();
+    }
+    assert(opened, 'お気に入りでない動画が見つからない');
     const title1 = $('#sheet h2').textContent;
     assert($('#sheet .detail-actions .play-main'), '再生ボタンがない');
     const fav = $('#sheet .fav-btn');
-    const v = state.videos.find((x) => x.title === title1) || null;
-    const before = v ? isFav(v.key) : null;
     fav.click(); await wait(300);
-    if (v) assert(isFav(v.key) !== before, 'お気に入りが切り替わらない');
+    assert(fav.getAttribute('aria-pressed') === 'true', 'お気に入りに入らない');
     fav.click(); await wait(300); // 元に戻す
+    assert(fav.getAttribute('aria-pressed') !== 'true', 'お気に入りから外れない');
     const next = $('#sheet .detail-bar [data-step="1"]');
     assert(next, '次へボタンがない');
     next.click(); await wait(500);
@@ -155,6 +160,7 @@ export async function runSelftest() {
 
   // 試験で変えた絞り込みを元に戻す
   Object.assign(filters, savedFilters);
+  $('#q').value = filters.q;
   saveFilters(); renderChips(); render();
 
   const passed = results.filter((r) => r.ok).length;
