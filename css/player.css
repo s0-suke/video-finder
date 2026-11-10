@@ -28,3 +28,31 @@
 .blocker { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); }
 .blocker .switch { height: auto; gap: 10px; }
 .blocker .btn { flex: none; }
+
+/* ---- ミニプレイヤー（再生中の詳細を閉じると、タブバーの上に縮めて再生を続ける） ---- */
+.sheet.mini {
+  /* bottom は sheet.js がタブバーの高さを測って入れる */
+  top: auto; left: 8px; right: 8px; z-index: 15; height: 64px; max-height: none;
+  display: flex; flex-direction: row; align-items: center; gap: 0; padding: 0; overflow: hidden;
+  border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);
+  box-shadow: 0 6px 20px rgba(0,0,0,.45);
+  transform: none; animation: mini-in .22s ease;
+}
+@media (min-width: 720px) { .sheet.mini { left: 50%; right: auto; width: 480px; margin-left: -240px; } }
+.sheet.mini > .grabber { display: none; }
+.sheet.mini > .detail { flex: none; width: 114px; height: 64px; display: block; }
+.sheet.mini > .detail > :not(.hero) { display: none; }
+.sheet.mini .hero { width: 114px; height: 64px; aspect-ratio: auto; border-radius: 0; box-shadow: none !important; }
+.mini-bar { flex: 1; min-width: 0; display: flex; align-items: center; height: 100%; }
+.mini-info {
+  flex: 1; min-width: 0; height: 100%; background: none; border: 0; padding: 0 4px 0 12px;
+  display: flex; flex-direction: column; justify-content: center; align-items: flex-start; text-align: left;
+}
+.mini-title { width: 100%; font-size: 13px; font-weight: 600; line-height: 1.35; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.mini-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.mini-close { flex: none; width: 48px; height: 100%; background: none; border: 0; color: var(--muted); font-size: 22px; }
+@keyframes mini-in { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .sheet.mini { animation: none; } }
+/* ミニプレイヤーの分だけ一覧とトーストを上げる */
+body.has-mini { padding-bottom: calc(var(--dock-h) + var(--safe-bottom) + 12px + 72px); }
+body.has-mini #toast { bottom: calc(var(--dock-h) + var(--safe-bottom) + 12px + 72px); }

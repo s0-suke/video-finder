@@ -7,7 +7,7 @@
 import { $, $$ } from './util.js';
 import { state } from './data.js';
 import { filters, saveFilters, render, renderChips } from './ui/list.js';
-import { isSheetOpen } from './ui/sheet.js';
+import { isSheetOpen, miniPlayer } from './ui/sheet.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 async function until(fn, ms = 6000) {
@@ -150,6 +150,37 @@ export async function runSelftest() {
     row.click(); await wait(500);
     assert(filters.studio, '選べない');
     filters.studio = ''; saveFilters(); renderChips(); render();
+  });
+
+  await check('再生中に閉じるとミニプレイヤーになり、タップで戻る・× で終わる', async () => {
+    const cards = $$('#grid .card');
+    assert(cards.length >= 2, 'カードが足りない');
+    cards[0].click();
+    assert(await until(() => isSheetOpen()), 'シートが開かない');
+    const title1 = $('#sheet h2').textContent;
+    // 実際のプレイヤーの代わりに中身のない iframe を置く（外部の再生ページは開かない）
+    const hero = $('#sheet .hero');
+    const f = document.createElement('iframe');
+    f.srcdoc = '<body style="background:#000"></body>';
+    hero.replaceChildren(f);
+    hero.classList.add('player-on');
+    await back();
+    assert(await until(() => miniPlayer() && !isSheetOpen(), 2000), 'ミニプレイヤーにならない');
+    assert(miniPlayer().querySelector('.hero iframe') === f, 'プレイヤーが作り直された');
+    const r = miniPlayer().getBoundingClientRect(), dock = $('#dock').getBoundingClientRect();
+    assert(r.bottom <= dock.top + 1 && r.height < 100, `位置・大きさがおかしい（bottom ${r.bottom} / タブバー ${dock.top}）`);
+    // 別の動画の詳細を開いて閉じても、ミニプレイヤーは残る
+    cards[1].click();
+    assert(await until(() => isSheetOpen()), '別の動画のシートが開かない');
+    await back();
+    assert(await until(() => !isSheetOpen(), 2000) && miniPlayer(), '別の動画を閉じたらミニプレイヤーが消えた');
+    miniPlayer().querySelector('.mini-info').click(); await wait(400);
+    assert(isSheetOpen() && !miniPlayer(), '大きく表示されない');
+    assert($('#sheet h2').textContent === title1 && $('#sheet .hero iframe') === f, '元の動画に戻らない');
+    await back();
+    assert(await until(() => miniPlayer(), 2000), '2 回目にミニプレイヤーにならない');
+    miniPlayer().querySelector('.mini-close').click(); await wait(300);
+    assert(!miniPlayer() && !$('#mini') && !document.body.classList.contains('has-mini'), '× で終わらない');
   });
 
   await check('想定外の例外が出ていない', () => {

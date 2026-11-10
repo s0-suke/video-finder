@@ -6,9 +6,17 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.8.0';
+export const VERSION = '1.9.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.9.0',
+    date: '2026-11-10',
+    items: [
+      'ミニプレイヤー: 再生中に詳細を下へスワイプして閉じると、タブバーの上に小さく表示して再生を続ける。タップ（または上へスワイプ）で元に戻り、× か下へスワイプで終了',
+      '詳細を下へスワイプするとき、シートが指に合わせて動くようにした',
+    ],
+  },
   {
     version: '1.8.0',
     date: '2026-11-10',

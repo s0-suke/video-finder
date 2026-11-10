@@ -18,7 +18,7 @@ import { mountDetails } from '../details.js';
 import { recordView } from '../history.js';
 import { releaseSpan, releaseLabel } from '../release.js';
 import { feature } from '../features.js';
-import { openSheet, closeSheet } from './sheet.js';
+import { openSheet, closeSheet, miniPlayer, expandMini, closeMini } from './sheet.js';
 import { setQuery, setStudio } from './list.js';
 
 const RELATED = 12;
@@ -72,6 +72,9 @@ function relatedHTML(video) {
 // opts.keepBack は「戻る」で開いたとき（戻り先の積み重ねを消さない）
 export function openDetail(video, opts = {}) {
   if (!video) return;
+  // ミニプレイヤーで再生中の動画なら、それを大きく表示する（読み込み直さない）
+  const m = miniPlayer();
+  if (m && m.dataset.key === video.key) return expandMini();
   nav = opts.list && feature('swipeNav') ? { list: opts.list, index: opts.index } : null;
   if (!opts.keepBack && !opts.fromRelated) back = [];
 
@@ -122,6 +125,7 @@ export function openDetail(video, opts = {}) {
 
   const main = el.querySelector('.play-main');
   const play = (url) => {
+    closeMini(); // 再生するのは 1 本だけ
     mountPlayer(hero, url);
     el.closest('.sheet').scrollTo({ top: 0, behavior: 'smooth' });
     recordView(video);
@@ -162,8 +166,12 @@ export function openDetail(video, opts = {}) {
     sx = null;
   });
 
-  openSheet(el, { tall: true });
+  const sheetEl = openSheet(el, { tall: true });
   shown = { video, el };
+  // ミニプレイヤーから大きく戻したとき、前後移動・戻る先をこの動画のものに戻す
+  sheetEl.dataset.key = video.key;
+  const myNav = nav, myBack = back;
+  sheetEl.__restore = () => { nav = myNav; back = myBack; shown = { video, el }; };
 
   // 各掲載サイトの本文からプレイヤーを取り出す。最初に見つかったものを大きな再生ボタンに割り当てる
   let mainUrl = null;
