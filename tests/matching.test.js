@@ -295,3 +295,83 @@ test('統合に使う品番: タイトルの品番と、品番だけのタグす
   assert.deepEqual(codesOf('雄穴中出し 24', ['G@MES', 'GAMS847', 'WIG-357']).sort(), ['GAMS847', 'WIG357']);
   assert.deepEqual(codesOf('x', ['FC1900097', 'NPR-0036'], 'NPR-0036').sort(), ['FC2PPV1900097', 'NPR0036']);
 });
+
+import { isCodeForm, titleSimilarity, titleGrams } from '../js/matching.js';
+
+test('品番の形の判定: タイトル先頭・タグからしか取れない品番も品番の形とみなす（Part-02 などは違う）', () => {
+  for (const c of ['GT-2714', 'MR-KR2387', 'GDSR-002-2', 'BWB-383', 'FC2-PPV-1365684', 'COCO566-02', '01-26-0013-02', 'VDGBXX0466_001', 'ORWEMA091', 'CH-00541']) {
+    assert.ok(isCodeForm(c), c);
+  }
+  for (const c of ['PART-02', 'Part-02', 'COVID-19', 'BEST-2023', '', null, 'gt-2714']) assert.ok(!isCodeForm(c), String(c));
+});
+
+test('タイトルの似ている度合い: 覚えておける 2 文字組から計算しても同じ値', () => {
+  assert.equal(titleSimilarity('abcd', 'abcd'), 1);
+  assert.equal(titleSimilarity('abcd', 'xyz'), 0);
+  assert.equal(titleSimilarity('abcd', 'bcde'), 2 / 4);
+  assert.deepEqual([...titleGrams('A-b c')], ['ab', 'bc']);
+});
+
+const shuffle = (a, seed) => { const b = a.slice(); let s = seed; for (let i = b.length - 1; i > 0; i--) { s = (s * 9301 + 49297) % 233280; const j = s % (i + 1); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+
+test('統合キーは投稿の並び順・件数で入れ替わらない（重なったら、その group の最小の投稿を含む動画が ~ なしを持つ）', () => {
+  // 同じ品番 GT-500 を、同じサイトの別作品 2 本が使っている（掲載元の付け間違い）
+  const base = [
+    post('1:10', 1, 'GT-500 – 夏の海で出会った体育会の青年', ['GT-500']),
+    post('1:20', 1, 'GT-500 – 冬の山小屋で過ごす二人の夜', ['GT-500']),
+  ];
+  const m0 = clusterPosts(base);
+  assert.equal(m0.get('1:10'), 'code:GT500');
+  assert.equal(m0.get('1:20'), 'code:GT500~1:20');
+  // 「冬」のほうに別サイトの投稿が 2 件増えて件数が逆転しても、~ なしのキーは「夏」のまま
+  const more = [...base,
+    post('3:5', 3, 'GT-500 – 冬の山小屋で過ごす二人の夜', ['GT-500']),
+    post('4:7', 4, 'GT-500 – 冬の山小屋で過ごす二人の夜', ['GT-500'])];
+  for (let seed = 1; seed <= 5; seed++) {
+    const m = clusterPosts(shuffle(more, seed));
+    assert.equal(m.get('1:10'), 'code:GT500', `seed ${seed}`);
+    assert.equal(m.get('1:20'), 'code:GT500~1:20', `seed ${seed}`);
+    assert.equal(m.get('3:5'), m.get('1:20'));
+    assert.equal(m.get('4:7'), m.get('1:20'));
+  }
+});
+
+test('統合: 同じシリーズ名で別の回（GT-101 / GT-102 / GT-103）を各サイトが載せても 1 本にしない', () => {
+  const title = '体育会系男子寮の秘密シリーズ総集編スペシャル';
+  const m = clusterPosts([
+    post('1:1', 1, `GT-101 – ${title}`, ['GT-101']),
+    post('3:1', 3, `GT-102 – ${title}`, ['GT-102']),
+    post('4:1', 4, `GT-103 – ${title}`, ['GT-103']),
+    post('4:2', 4, 'GT-102 – 体育会系男子寮の秘密 第2話', ['GT-102']),
+  ]);
+  assert.equal(new Set(['1:1', '3:1', '4:1'].map((k) => m.get(k))).size, 3);
+  assert.ok(!together(m, '1:1', '4:2'), 'ほかの回の投稿を吸い込まない');
+  assert.ok(together(m, '3:1', '4:2'), '同じ品番の投稿は従来どおりまとまる');
+  // 販売元ごとに番号の振り方が違うだけ（接頭辞が違う）ならまとめる
+  const m2 = clusterPosts([
+    post('1:1', 1, 'とあるマニアの盗撮投稿 Part.06 長い長いタイトル', ['KT83787']),
+    post('4:1', 4, '01-01-0231-01 – とあるマニアの盗撮投稿 Part.06 長い長いタイトル', ['01-01-0231-01']),
+  ]);
+  assert.ok(together(m2, '1:1', '4:1'));
+});
+
+test('統合: 同じサイトで品番が食い違う投稿（同じ接頭辞で数字が違う）は、タイトルが似ていてもまとめない', () => {
+  const m = clusterPosts([
+    post('1:1', 1, '腹筋パキパキ元バレー部員が男のキスにウットリ', ['BOT-0322', 'VDGBXX0178']),
+    post('1:2', 1, '腹筋パキパキ元バレー部員が男のキスにウットリ', ['BOT-0302', 'VDGBXX0171']),
+    post('1:3', 1, '腹筋パキパキ元バレー部員が男のキスにウットリ', ['VDGBXX0178']),
+    post('3:1', 3, 'BOT-0322 – 腹筋パキパキ元バレー部員が男のキスにウットリ', ['BOT-0322', 'VDGBXX0178']),
+  ]);
+  assert.ok(!together(m, '1:1', '1:2'));
+  assert.ok(together(m, '1:1', '3:1'));
+  assert.ok(together(m, '1:3', '3:1'), '番号の振り方が違うだけの同じサイトの再掲載はまとめる');
+});
+
+test('一般語と重なるスタジオの別表記は、掲載元の書き方と完全に同じときだけ使う', () => {
+  assert.equal(studioKey('GAMES'), studioKey('G@MES'));
+  assert.notEqual(studioKey('Games'), studioKey('G@MES'));
+  assert.notEqual(studioKey('games'), studioKey('G@MES'));
+  assert.equal(studioKey('KO'), studioKey('KO COMPANY'));
+  assert.equal(studioKey('KO Company'), studioKey('KO COMPANY'));
+  assert.notEqual(studioKey('Ko'), studioKey('KO COMPANY'));
+});

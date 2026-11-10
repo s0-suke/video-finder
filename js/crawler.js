@@ -5,10 +5,10 @@
 // - 通信量を抑えるため本文は取らない（本文は詳細を開いたときに source.js が取る）
 
 import * as db from './db.js';
-import { state, emit, rebuild, saveSite, DEFAULT_SITES } from './data.js';
+import { state, emit, rebuild, saveSite, forgetPost, DEFAULT_SITES } from './data.js';
 import { wpGet } from './wp.js';
 import { sleep, decodeEntities } from './util.js';
-import { isCodeTag, extractCode, stripCode, groupKey, pickStudio, safeUrl } from './matching.js';
+import { extractCode, stripCode, groupKey, pickStudio, safeUrl } from './matching.js';
 
 const PER_PAGE = 100;
 const PAGE_DELAY_MS = 300;
@@ -57,6 +57,26 @@ async function resolveMedia(site, ids) {
   return map;
 }
 
+// 投稿のタグの持ち方の版（2: 品番だけのタグも残す）。これより古い投稿は repairCodes でタグを取り直す
+const TERMS_VERSION = 2;
+
+// WordPress の投稿 1 件から、タイトル・品番・タグなど収集で決まる項目を作る（toPosts と repairCodes で共通）
+function postFields(site, key, p) {
+  const title = decodeEntities(p.title && p.title.rendered);
+  const tags = (p.tags || []).map((id) => termCache.get(`${site.id}:${id}`)).filter(Boolean);
+  const cats = (p.categories || []).map((id) => termCache.get(`${site.id}:${id}`)).filter(Boolean);
+  const code = extractCode(title, tags);
+  const clean = stripCode(title, code);
+  return {
+    title: clean,
+    // スタジオは仮の値（一覧ではタグ・カテゴリから選び直す: data.js の rebuild）
+    code, group: groupKey(code, clean, key), studio: pickStudio(tags, cats),
+    // 品番だけのタグも残す（別の番号での統合と検索に使う。表示では除く）
+    tags: [...new Set([...cats, ...tags])],
+    termsV: TERMS_VERSION,
+  };
+}
+
 async function toPosts(site, raw, { backfill }) {
   const [media] = await Promise.all([
     resolveMedia(site, raw.map((p) => p.featured_media)),
@@ -65,22 +85,14 @@ async function toPosts(site, raw, { backfill }) {
   ]);
   return raw.map((p) => {
     const key = `${site.id}:${p.id}`;
-    const title = decodeEntities(p.title && p.title.rendered);
-    const tags = (p.tags || []).map((id) => termCache.get(`${site.id}:${id}`)).filter(Boolean);
-    const cats = (p.categories || []).map((id) => termCache.get(`${site.id}:${id}`)).filter(Boolean);
-    const code = extractCode(title, tags);
-    const clean = stripCode(title, code);
     const prev = state.posts.get(key) || {};
     return {
       ...prev, // 詳細を開いたときに取った本文由来の情報（embeds など）を残す
-      key, siteId: site.id, postId: p.id, link: safeUrl(p.link, site.url) || '', title: clean, date: p.date,
+      key, siteId: site.id, postId: p.id, link: safeUrl(p.link, site.url) || '', date: p.date,
       thumb: media[p.featured_media] || prev.thumb || null,
       // 新着表示用。初回の全件取得で入った分は 0（NEW にしない）
       seenAt: prev.key ? prev.seenAt || 0 : backfill ? 0 : Date.now(),
-      // スタジオは仮の値（一覧ではタグ・カテゴリから選び直す: data.js の rebuild）
-      code, group: groupKey(code, clean, key), studio: pickStudio(tags, cats),
-      // 品番だけのタグも残す（別の番号での統合と検索に使う。表示では除く）
-      tags: [...new Set([...cats, ...tags])],
+      ...postFields(site, key, p),
     };
   });
 }
@@ -188,9 +200,12 @@ export function backfillProgress() {
   return done / total;
 }
 
-// 一度だけ動く修復: 品番の判定の不具合（年に見える番号の GT-1925 などを品番から外していた版）で
-// 品番とタイトル中の品番を失った投稿を、タイトルとタグを取り直して判定し直す
-const REPAIR_KEY = 'repairYearCodes1';
+// 一度だけ動く修復: タイトル・タグ・カテゴリを取り直し、品番とタグを今の収集と同じ形にする。
+// - 以前の版は品番だけのタグを捨てていた（別の番号での統合に使えない）
+// - 開発中の版で、タイトル先頭・タグからしか取れない形の品番（FC2-PPV-1365684 / COCO566-02 など）を誤って外した投稿がある
+//   （タイトルからは収集時に品番を外しているので、取り直さないと戻せない）
+// タグの持ち方の版（termsV）が古い投稿だけが対象。収集で取り直した投稿は対象外になる
+const REPAIR_KEY = 'repairTerms2';
 let repairing = false;
 export async function repairCodes() {
   if (repairing || crawl.running || DEV || !navigator.onLine || (await db.kvGet(REPAIR_KEY, false))) return;
@@ -201,23 +216,22 @@ export async function repairCodes() {
       const siteKey = `${REPAIR_KEY}:${site.id}`;
       if (await db.kvGet(siteKey, false)) continue;
       try {
-        const ids = [...state.posts.values()].filter((p) => p.siteId === site.id && !p.code).map((p) => p.postId);
+        const ids = [...state.posts.values()].filter((p) => p.siteId === site.id && (p.termsV || 0) < TERMS_VERSION).map((p) => p.postId);
         for (let i = 0; i < ids.length; i += 100) {
           const { data } = await wpGet(site.url, 'posts', { include: ids.slice(i, i + 100).join(','), per_page: 100, _fields: 'id,title,tags,categories' });
-          await resolveTerms(site, data.flatMap((p) => p.tags || []), 'tags');
+          await Promise.all([
+            resolveTerms(site, data.flatMap((p) => p.tags || []), 'tags'),
+            resolveTerms(site, data.flatMap((p) => p.categories || []), 'categories'),
+          ]);
+          if (gen !== crawl.generation) return;
           const fixed = [];
           for (const raw of data) {
             const post = state.posts.get(`${site.id}:${raw.id}`);
-            if (!post || post.code) continue;
-            const title = decodeEntities(raw.title && raw.title.rendered);
-            const tags = (raw.tags || []).map((id) => termCache.get(`${site.id}:${id}`)).filter(Boolean);
-            const code = extractCode(title, tags);
-            if (!code) continue;
-            Object.assign(post, { code, title: stripCode(title, code), group: groupKey(code, stripCode(title, code), post.key) });
-            post.tags = post.tags.filter((t) => !isCodeTag(t));
+            if (!post || (post.termsV || 0) >= TERMS_VERSION) continue; // その間に収集で取り直した投稿はそのまま
+            Object.assign(post, postFields(site, post.key, raw));
+            forgetPost(post); // rebuild の覚えておいた材料を作り直させる
             fixed.push(post);
           }
-          if (gen !== crawl.generation) return;
           if (fixed.length) { await db.putAll('posts', fixed); scheduleRebuild(); }
           await sleep(PAGE_DELAY_MS);
         }
