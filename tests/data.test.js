@@ -156,3 +156,76 @@ test('一覧の統合: 品番のない投稿を同じタイトルの品番付き
   assert.equal(state.videos.filter((v) => v.code === 'BOY-126').length, 2);
   assert.equal(new Set(state.videos.map((v) => v.key)).size, 3);
 });
+
+import { extractCode, stripCode, groupKey } from '../js/matching.js';
+import { relocate, sourceKeys } from '../js/data.js';
+
+// いまの収集（crawler.js の toPosts）が保存する形
+const crawled = (siteId, postId, rawTitle, tags = []) => {
+  const code = extractCode(rawTitle, tags);
+  const title = stripCode(rawTitle, code);
+  return post(siteId, postId, { title, code, group: groupKey(code, title, `${siteId}:${postId}`), tags });
+};
+
+test('移行は冪等: いまの収集で保存した投稿（タイトル先頭・タグからしか取れない品番も）は変えず、2 回通しても同じ', () => {
+  const cases = [
+    ['FC2-PPV-1365684 – 筋肉', []], ['COCO566-02 – 〈飛貴〉人生初アナルSEX', []], ['01-26-0013-02 – 激しい交尾', []],
+    ['VDGBXX0466_001 – 猛×翔大', []], ['ORWEMA091 – No.091 人気モデル', []], ['ナマ狂い種壺待機5', ['BWB383']],
+    ['GDSR-002-2 – 淫父蕩子', []], ['顔射に中出し', ['GT-2714']], ['3 – 本当に数字で始まるタイトル', ['ABC-123-1']],
+    ['x', ['FC4468205']], ['ノンケの密室', ['COCO566-02']],
+  ];
+  for (const [t, tags] of cases) {
+    const p = crawled(1, 1, t, tags);
+    const before = { ...p };
+    assert.ok(p.code, t);
+    assert.equal(migratePost(p), false, t);
+    assert.deepEqual(p, before, t);
+    assert.equal(migratePost(p), false, t);
+  }
+});
+
+test('移行: 古い版で保存した投稿を直したあとは、もう一度通しても変わらない（分割番号は品番が分割番号なしの形のときだけ戻す）', () => {
+  const a = post(4, 1, { title: '2 – 淫父蕩子', code: 'GDSR-002', group: 'code:GDSR002' });
+  assert.equal(migratePost(a), true);
+  assert.equal(a.code, 'GDSR-002-2');
+  assert.equal(migratePost(a), false);
+  assert.equal(a.code, 'GDSR-002-2');
+  // すでに分割番号がある品番・掲載元独自の番号には付け足さない
+  for (const code of ['ABC-123-1', 'COCO566-02', 'VDGBXX0466_001']) {
+    const p = post(4, 2, { title: '3 – 何かのタイトル', code, group: groupKey(code, 'x', '4:2') });
+    assert.equal(migratePost(p), false, code);
+    assert.equal(p.code, code);
+  }
+  const b = post(1, 2, { title: 'あの大人気巨根カコカワモデル涼真-RYOMA-19歳が某ネカフェで', code: 'RYOMA-19', group: 'code:RYOMA19' });
+  assert.equal(migratePost(b), true);
+  assert.equal(migratePost(b), false);
+  assert.equal(b.code, null);
+});
+
+test('付け替え: 構成していた投稿 → すべての投稿の品番 → 正規化したタイトルの順に探し、候補が複数ならタイトルが似ているほう', () => {
+  state.sites = [{ id: 1, name: 'a', enabled: true }, { id: 3, name: 'b', enabled: true }, { id: 4, name: 'c', enabled: true }];
+  state.posts = new Map([
+    crawled(1, 1, 'デカマラ若リーマン、ゴーグルマンに癒してもらう!', ['G-BOT', 'VDTWXX0033']),
+    crawled(3, 1, 'BOT-0346 – デカマラ若リーマン、ゴーグルマンに癒してもらう！ほか', ['BOT-0346', 'G-BOT', 'VDTWXX0033']),
+    crawled(4, 5, 'GT-500 – 夏の海で出会った体育会の青年', ['GT-500']),
+    crawled(4, 6, 'GT-500 – 冬の山小屋で過ごす二人の夜', ['GT-500']),
+    crawled(4, 7, '品番のない長めのタイトル【前編】', []),
+  ].map((p) => [p.key, p]));
+  rebuild();
+  const bot = state.videos.find((v) => v.sources.length === 2);
+  assert.ok(bot);
+  assert.equal(findMoved({ posts: ['3:1', '9:9'] }), bot);
+  assert.equal(findMoved({ code: 'VDTWXX0033' }), bot, '主な投稿以外の品番でも探せる');
+  assert.equal(findMoved({ code: 'BOT0346' }), bot);
+  assert.equal(findMoved({ title: '品番のない長めのタイトル 前編' })?.sources[0].key, '4:7', '記号の違うタイトル');
+  assert.equal(findMoved({ code: 'GT-500', title: '冬の山小屋で過ごす二人の夜' })?.sources[0].key, '4:6');
+  assert.equal(findMoved({ code: 'GT-500', title: '夏の海で出会った体育会の青年' })?.sources[0].key, '4:5');
+  assert.deepEqual(sourceKeys(bot), ['1:1', '3:1']);
+  // 統合キーが別の作品に移った行は、構成していた投稿のある動画に付け替える
+  const summer = state.videos.find((v) => v.sources[0].key === '4:5');
+  const winter = state.videos.find((v) => v.sources[0].key === '4:6');
+  assert.equal(relocate({ key: summer.key, posts: ['4:6'] }), winter);
+  assert.equal(relocate({ key: summer.key, posts: ['4:5'] }), null, '同じ作品なら付け替えない');
+  assert.equal(relocate({ key: summer.key }), null, '投稿の記録がない古い行はそのまま');
+  assert.equal(relocate({ key: 'code:XX1', code: 'BOT-0346' }), bot);
+});

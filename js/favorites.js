@@ -7,14 +7,15 @@
 //   favButton(video)    詳細シートに置くハートボタン（HTMLElement）を返す
 //
 // 保存形式（favs ストア、keyPath: key）
-//   { key, addedAt, title, thumb, code, studio }
-//   一覧から消えた動画（サイトの削除・収集データの削除など）でも中身が分かるように、登録時の情報を持っておく
+//   { key, addedAt, title, thumb, code, studio, posts }
+//   一覧から消えた動画（サイトの削除・収集データの削除など）でも中身が分かるように、登録時の情報を持っておく。
+//   posts は動画を構成していた投稿の key（統合キーが変わったときの付け替えに使う。data.js の findMoved）
 //
 // 書き出しファイルの形式
 //   { app: 'video-finder', type: 'favorites', version: 1, exportedAt, items: [行, …] }
 
 import * as db from './db.js';
-import { state, on, emit, findMoved } from './data.js';
+import { state, on, emit, relocate, sourceKeys } from './data.js';
 import { toast, esc } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
@@ -47,8 +48,11 @@ function toRow(video, addedAt = Date.now()) {
     thumb: video.thumb || '',
     code: video.code || '',
     studio: video.studio || '',
+    posts: sourceKeys(video),
   };
 }
+
+const sameKeys = (a, b) => Array.isArray(a) && a.length === b.length && a.every((k, i) => k === b[i]);
 
 export async function toggleFav(video) {
   if (!video || !video.key) return false;
@@ -108,21 +112,27 @@ function fillMissing() {
   let moved = false;
   for (const r of [...rows.values()]) {
     let v = state.byKey.get(r.key);
-    // 統合キーが変わった動画は、品番・タイトルで探し直して付け替える
-    if (!v && state.videos.length && (v = findMoved(r)) && !rows.has(v.key)) {
+    // 統合キーが変わった動画は、構成していた投稿・品番・タイトルで探し直して付け替える（data.js の relocate）
+    const to = relocate(r);
+    if (to && !rows.has(to.key)) {
+      v = to;
       rows.delete(r.key);
       db.del(STORE, r.key).catch(() => {});
       r.key = v.key;
+      r.posts = sourceKeys(v);
       rows.set(r.key, r);
       changed.push(r);
       moved = true;
       continue;
     }
-    if (!v) continue;
+    if (!v || to) continue; // 付け替え先がすでにお気に入りなら、この行は触らない
     let dirty = false;
     for (const f of ['title', 'thumb', 'code', 'studio']) {
       if (!r[f] && v[f]) { r[f] = v[f]; dirty = true; }
     }
+    // 構成している投稿が変わったら（別のサイトの投稿が合流したなど）覚え直す
+    const keys = sourceKeys(v);
+    if (keys.length && !sameKeys(r.posts, keys)) { r.posts = keys; dirty = true; }
     if (dirty) changed.push(r);
   }
   if (changed.length) db.putAll(STORE, changed).catch(() => {});
@@ -207,6 +217,7 @@ function normalize(x) {
     key: x.key,
     addedAt: Number.isFinite(t) && t > 0 ? t : Date.now(),
     title: s(x.title), thumb: s(x.thumb), code: s(x.code), studio: s(x.studio),
+    posts: Array.isArray(x.posts) ? x.posts.filter((k) => typeof k === 'string').slice(0, 50) : [],
   };
 }
 

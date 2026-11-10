@@ -1,7 +1,7 @@
 // 視聴履歴（再生した動画を新しい順に残す）
 
 import * as db from './db.js';
-import { state, on, emit, findMoved } from './data.js';
+import { state, on, emit, relocate, sourceKeys } from './data.js';
 import { feature } from './features.js';
 
 const MAX = 300;
@@ -15,16 +15,15 @@ export async function init() {
   remap();
 }
 
-// 統合キーが変わった動画は、品番・タイトルで探し直して付け替える
+// 統合キーが変わった動画は、構成していた投稿（posts）・品番・タイトルで探し直して付け替える
 function remap() {
   if (!state.videos.length) return;
   for (const h of [...rows.values()]) {
-    if (state.byKey.has(h.key)) continue;
-    const v = findMoved(h);
+    const v = relocate(h);
     if (!v || viewed.has(v.key)) continue;
     viewed.delete(h.key); rows.delete(h.key);
     db.del('history', h.key).catch(() => {});
-    const row = { ...h, key: v.key };
+    const row = { ...h, key: v.key, posts: sourceKeys(v) };
     viewed.set(row.key, row.at); rows.set(row.key, row);
     db.put('history', row).catch(() => {});
   }
@@ -40,7 +39,7 @@ export async function recordView(video) {
   if (!feature('history')) return; // 視聴履歴をオフにしているときは記録しない
   const at = Date.now();
   viewed.set(video.key, at);
-  const row = { key: video.key, at, title: video.title, thumb: video.thumb, code: video.code };
+  const row = { key: video.key, at, title: video.title, thumb: video.thumb, code: video.code, posts: sourceKeys(video) };
   rows.set(row.key, row);
   await db.put('history', row);
   if (viewed.size > MAX) {

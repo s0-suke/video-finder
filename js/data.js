@@ -6,18 +6,42 @@
 //   'favs'      お気に入りが変わった（favorites.js が発行）
 
 import * as db from './db.js';
-import { studioKey, isNoiseTag, studioCandidates, studioRank, chooseStudio, extractCode, groupKey, isCodeTag, normalizeCode, normalizeTitle, codesOf, titleKeyOf, clusterPosts, releaseTitleKey, plausibleRelease, stripCode, safeUrl } from './matching.js';
+import { studioKey, isNoiseTag, studioCandidates, studioRank, chooseStudio, extractCode, isCodeForm, groupKey, isCodeTag, normalizeCode, codesOf, titleKeyOf, titleSimilarity, clusterPosts, releaseTitleKey, plausibleRelease, stripCode, safeUrl } from './matching.js';
 import { buildEstimateIndex, estimateRelease } from './release-estimate.js';
 
-// スタジオ名は保存した値を使わず、rebuild のたびにタグ・カテゴリ（p.tags）から選び直す
-// （判定を改良したときに保存済みの投稿にも効くように。候補の洗い出しは投稿ごとに覚えておく）
-const candCache = new WeakMap();
+// 投稿ごとに覚えておく、統合・スタジオ・検索の材料（rebuild のたびに 6 万件分を作り直さないため）。
+// 投稿の中身（タイトル・品番・タグ・スタジオ）を書き換えたときは forgetPost で消す（収集で取り直した投稿は別のオブジェクトになる）。
+// - 統合（clusterPosts に渡す形。codes / tkey / grams は codesOf / titleKeyOf / titleGrams の結果。grams は clusterPosts が必要なときに埋める）
+// - スタジオ名の候補（cands）。スタジオ名は保存した値を使わず、rebuild のたびにタグ・カテゴリ（p.tags）から選び直す
+//   （判定を改良したときに保存済みの投稿にも効くように）。保存しておいたスタジオ名は、タグ・カテゴリに候補がないときの予備（最後の候補）
+// - 検索用の文字列（hay）と、otokoki の記事との照合に使うタイトルのキー（rkey）
+const infoCache = new WeakMap();
+function infoOf(p) {
+  let c = infoCache.get(p);
+  if (!c) {
+    const tags = p.tags || [];
+    c = {
+      key: p.key, siteId: p.siteId, code: p.code, title: p.title, tags, group: p.group,
+      codes: codesOf(p.title || '', tags, p.code), tkey: titleKeyOf(p.title), grams: null, cands: null, hay: null, rkey: undefined,
+    };
+    infoCache.set(p, c);
+  }
+  return c;
+}
+export const forgetPost = (p) => { infoCache.delete(p); };
 function studioCandsOf(p) {
-  const sig = (p.tags || []).join('\u0001') + '\u0001' + (p.studio || '');
-  let c = candCache.get(p);
-  // 保存しておいたスタジオ名は、タグ・カテゴリに候補がないときの予備（最後の候補）
-  if (!c || c.sig !== sig) candCache.set(p, (c = { sig, cands: studioCandidates([...(p.tags || []), p.studio]) }));
-  return c.cands;
+  const c = infoOf(p);
+  return c.cands || (c.cands = studioCandidates([...c.tags, p.studio]));
+}
+// 検索用の文字列（投稿ごと）
+function hayOf(p) {
+  const c = infoOf(p);
+  return c.hay || (c.hay = [p.title, ...c.tags].join('\n').normalize('NFKC').toLowerCase());
+}
+// otokoki の記事との照合に使うタイトルのキー
+function releaseKeyOf(p) {
+  const c = infoOf(p);
+  return c.rkey !== undefined ? c.rkey : (c.rkey = releaseTitleKey(p.title || ''));
 }
 // 品番だけのタグか（表示用のタグから除く。同じタグが何度も出るので覚えておく）
 const codeTagCache = new Map();
@@ -25,14 +49,6 @@ function codeTag(t) {
   let r = codeTagCache.get(t);
   if (r === undefined) { if (codeTagCache.size > 100000) codeTagCache.clear(); codeTagCache.set(t, (r = isCodeTag(t))); }
   return r;
-}
-// 統合に使う品番の一覧とタイトルのキー（タイトル・タグ・品番が変わらない限り作り直さない）
-const codesCache = new WeakMap();
-function codesOfPost(p) {
-  const sig = p.title + '\u0001' + (p.code || '') + '\u0001' + (p.tags || []).join('\u0001');
-  let c = codesCache.get(p);
-  if (!c || c.sig !== sig) codesCache.set(p, (c = { sig, codes: codesOf(p.title || '', p.tags || [], p.code), tkey: titleKeyOf(p.title) }));
-  return c;
 }
 
 export const DEFAULT_SITES = [
@@ -68,8 +84,9 @@ function releaseOf(key, code, rows) {
     const d = state.release.byCode.get(normalizeCode(code));
     if (ok(d)) return { date: d, src: 'otokoki' };
   }
+  if (!state.release.byTitle.size) return null;
   for (const r of rows) {
-    const k = releaseTitleKey(r.title);
+    const k = releaseKeyOf(r);
     const d = k && state.release.byTitle.get(k);
     if (ok(d)) return { date: d, src: 'otokoki' };
   }
@@ -111,42 +128,60 @@ export const events = new EventTarget();
 export const emit = (type, detail) => events.dispatchEvent(new CustomEvent(type, { detail }));
 export const on = (type, fn) => events.addEventListener(type, (e) => fn(e.detail));
 
+// 保存済み投稿の移行（migratePost）を済ませた版。判定を変えて移行し直すときに上げる
+const MIGRATE_KEY = 'postsMigrated';
+const MIGRATE_VERSION = 2;
+
 export async function loadAll() {
   state.sites = await db.getAll('sites');
+  // 移行は版ごとに一度だけ（毎回の起動で 6 万件を判定し直さない）
+  const migrate = (await db.kvGet(MIGRATE_KEY, 0)) < MIGRATE_VERSION;
   const fixed = [];
   for (const p of await db.getAll('posts')) {
-    if (migratePost(p)) fixed.push(p);
+    if (migrate && migratePost(p)) fixed.push(p);
     state.posts.set(p.key, p);
   }
   if (fixed.length) await db.putAll('posts', fixed);
+  if (migrate) await db.kvSet(MIGRATE_KEY, MIGRATE_VERSION);
   rebuild();
 }
 
-// 品番の判定を改良したとき用: 保存済み投稿の品番を判定し直す（変わったら true）。
+// 分割番号の付いていない品番（GDSR-002。GDSR-002-1 や COCO566-02 は対象外）
+const NO_PART_CODE = /^[A-Z]{2,8}-(?:[A-Z]{1,4}-?)?\d{2,6}$/;
+
+// 品番の判定を改良したとき用: 保存済み投稿の品番を判定し直す（変わったら true）。何度通しても結果は変わらない。
 // - 品番のない投稿 → 新しい判定で品番が取れれば付ける
-// - 一般語（Part-02 など）を誤って品番にしていた投稿 → 外す
+// - 一般語（Part-02 など）を誤って品番にしていた投稿 → 外す（タイトル先頭・タグからしか取れない形の品番は残す: isCodeForm）
 // - 外部 URL が http(s) でないリンクは捨てる
-// - 分割番号（GDSR-002-2）を落として「2 – タイトル」と保存した投稿 → 品番に分割番号を戻す
+// - 分割番号（GDSR-002-2）を落として「2 – タイトル」と保存した投稿 → 品番に分割番号を戻す（品番が分割番号なしの形のときだけ）
 // - タイトルの途中の語を品番にしていた投稿（「涼真-RYOMA-19歳が…」の RYOMA-19）→ 判定し直す
 export function migratePost(p) {
+  const changed = migrateFields(p);
+  if (changed) forgetPost(p);
+  return changed;
+}
+
+function migrateFields(p) {
   let changed = false;
   if (p.link && !safeUrl(p.link)) { p.link = ''; changed = true; }
-  if (p.code && extractCode(p.code) !== p.code) {
+  if (p.code && !isCodeForm(p.code)) {
     p.code = null;
     p.group = groupKey(null, p.title, p.key);
     changed = true;
   }
   if (p.code) {
-    const part = p.title.match(/^(\d{1,3}|[A-F])\s+[–—-]\s+/);
-    if (part && /^[A-Z]{2,8}-/.test(p.code)) {
+    const part = NO_PART_CODE.test(p.code) && p.title.match(/^(\d{1,3}|[A-F])\s+[–—-]\s+/);
+    if (part) {
       p.code = `${p.code}-${part[1]}`;
       p.title = p.title.slice(part[0].length);
       p.group = groupKey(p.code, p.title, p.key);
       return true;
     }
-    // 品番がタイトルの途中に残っている（先頭から外せなかった）ものだけ判定し直す
-    if (!normalizeTitle(p.title).includes(normalizeTitle(p.code))) return changed;
-    const again = extractCode(p.title, p.tags || []);
+    // 品番がそのままの形でタイトルの途中に残っている（先頭から外せなかった）ものだけ判定し直す。
+    // 末尾の「– DT020」のようにハイフンなしで書かれたもの、「GLOSSMEN NM74 …」のように語として書かれたものは、
+    // タグから取った品番なので残す（以前の版で保存した投稿は品番だけのタグを持っていないので、タイトルの語をタグ代わりに確かめる）
+    if (!p.title.toUpperCase().includes(p.code)) return changed;
+    const again = extractCode(p.title, [...(p.tags || []), ...p.title.split(/\s+/)]);
     if (again === p.code) return changed;
     p.code = null;
     p.group = groupKey(null, p.title, p.key);
@@ -170,21 +205,12 @@ function displayTitle(title, code) {
   return t;
 }
 
-// 検索用の文字列（投稿ごと）。title / tags が変わらない限り作り直さない
-const hayCache = new WeakMap();
-function hayOf(p) {
-  const sig = p.title + '\u0001' + (p.tags || []).join('\u0001');
-  let c = hayCache.get(p);
-  if (!c || c.sig !== sig) hayCache.set(p, (c = { sig, hay: sig.replace(/\u0001/g, '\n').normalize('NFKC').toLowerCase() }));
-  return c.hay;
-}
-
 export function rebuild() {
   const enabled = new Set(state.sites.filter((s) => s.enabled).map((s) => s.id));
   const siteName = Object.fromEntries(state.sites.map((s) => [s.id, s.name]));
   const posts = [...state.posts.values()].filter((p) => enabled.has(p.siteId));
   // 品番（別の書き方・別の番号も含む）とタイトルで投稿をまとめる（matching.js の clusterPosts）
-  const groupOf = clusterPosts(posts.map((p) => ({ key: p.key, siteId: p.siteId, code: p.code, title: p.title, tags: p.tags, group: p.group, ...codesOfPost(p) })));
+  const groupOf = clusterPosts(posts.map(infoOf));
   const groups = new Map();
   for (const p of posts) {
     const k = groupOf.get(p.key) || p.group;
@@ -252,18 +278,53 @@ export function rebuild() {
   state.studios = studios;
 }
 
-// 統合キーが変わった動画（品番の判定を改良したときなど）を、保存しておいた品番・タイトルから探し直す。
-// お気に入り・履歴の付け替えに使う
+// 動画を構成している投稿の key（並びをそろえる）。お気に入り・履歴の行に残し、findMoved の付け替えに使う
+export const sourceKeys = (video) => (video.sources || []).map((s) => s.key).sort();
+
+// 統合キーが変わった動画（品番の判定を改良したとき、別の投稿とまとまったときなど）を探し直す。お気に入り・履歴の付け替えに使う。
+// 保存しておいた行（{ code, title, posts }）の、構成していた投稿の key（posts）→ 品番（各動画のすべての投稿の品番）→ タイトルの順に探す。
+// 品番・タイトルで候補が複数あるときは、タイトルがいちばん似ているもの
 let movedIndex = null;
-export function findMoved({ code, title }) {
+const addTo = (m, k, v) => { if (!k) return; const a = m.get(k); if (!a) m.set(k, [v]); else if (!a.includes(v)) a.push(v); };
+export function findMoved({ code, title, posts } = {}) {
   if (!movedIndex) {
-    movedIndex = { code: new Map(), title: new Map() };
+    movedIndex = { post: new Map(), code: new Map(), tkey: new Map(), title: new Map() };
     for (const v of state.videos) {
-      if (v.code && !movedIndex.code.has(normalizeCode(v.code))) movedIndex.code.set(normalizeCode(v.code), v);
-      if (v.title && !movedIndex.title.has(v.title)) movedIndex.title.set(v.title, v);
+      for (const s of v.sources) {
+        const info = infoOf(s);
+        movedIndex.post.set(s.key, v);
+        for (const c of info.codes) addTo(movedIndex.code, c, v);
+        addTo(movedIndex.tkey, info.tkey, v);
+      }
+      if (v.code) addTo(movedIndex.code, normalizeCode(v.code), v);
+      addTo(movedIndex.tkey, titleKeyOf(v.title), v);
+      addTo(movedIndex.title, v.title, v);
     }
   }
-  return (code && movedIndex.code.get(normalizeCode(code))) || (title && movedIndex.title.get(title)) || null;
+  if (Array.isArray(posts) && posts.length) {
+    const count = new Map();
+    for (const k of posts) { const v = movedIndex.post.get(k); if (v) count.set(v, (count.get(v) || 0) + 1); }
+    if (count.size) return [...count].sort((a, b) => b[1] - a[1])[0][0];
+  }
+  const cands = (code && movedIndex.code.get(normalizeCode(code))) ||
+    (title && (movedIndex.tkey.get(titleKeyOf(title)) || movedIndex.title.get(title))) || [];
+  if (cands.length < 2 || !title) return cands[0] || null;
+  let best = null, bestSim = -1;
+  for (const v of cands) { const s = titleSimilarity(title, v.title); if (s > bestSim) { best = v; bestSim = s; } }
+  return best;
+}
+
+// お気に入り・履歴の行（{ key, code, title, posts }）がいま指すべき動画。付け替えが要らなければ null。
+// - 行の key の動画がない → findMoved で探す
+// - 行の key の動画はあるが、構成していた投稿が 1 つも含まれず、その投稿がほかの動画にある → そちら（統合キーが別の作品に移ったとき）
+export function relocate(row) {
+  if (!state.videos.length) return null;
+  const v = state.byKey.get(row.key);
+  if (!v) return findMoved(row);
+  if (!Array.isArray(row.posts) || !row.posts.length) return null;
+  if (v.sources.some((s) => row.posts.includes(s.key))) return null;
+  const w = findMoved({ posts: row.posts });
+  return w && w !== v ? w : null;
 }
 
 export async function saveSite(site) {

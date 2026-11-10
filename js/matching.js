@@ -90,6 +90,11 @@ export function codesOf(title, tags = [], code = null) {
 // タグが品番そのものか（表示用のタグから除く）
 export const isCodeTag = (t) => extractCode('', [t]) !== null;
 
+// 保存してある品番が、いまの判定で品番として取り出せる形か（タイトル中・タイトル先頭の掲載元の番号・品番だけのタグのどれか）。
+// extractCode(code) だけで確かめると、タイトル先頭やタグからしか取れない形（FC2-PPV-1365684 / COCO566-02 / 01-26-0013-02 /
+// VDGBXX0466_001 / ORWEMA091 など）を誤った品番とみなしてしまう
+export const isCodeForm = (c) => !!c && (codeIn(c) === c || tagCode(c) === c);
+
 // 外部サイトから取った URL を、base を基準に解決して http(s) のものだけ返す（javascript: などは捨てる）
 export function safeUrl(u, base) {
   if (!u) return null;
@@ -123,97 +128,145 @@ export function groupKey(code, title, postKey) {
 
 // ---- 投稿をまとめて動画にする ----
 
-// タイトルの似ている度合い（記号を除いた 2 文字ずつの組の重なり。0〜1）
-export function titleSimilarity(a, b) {
-  const grams = (s) => {
-    const n = normalizeTitle(s || '');
-    const g = new Set();
-    for (let i = 0; i < n.length - 1; i++) g.add(n.slice(i, i + 2));
-    if (n.length === 1) g.add(n);
-    return g;
-  };
-  const A = grams(a), B = grams(b);
+// タイトルの 2 文字ずつの組（記号を除いて正規化したもの）。titleSimilarity の材料で、投稿ごとに覚えておけるよう分けてある
+export function titleGrams(title) {
+  const n = normalizeTitle(title || '');
+  const g = new Set();
+  for (let i = 0; i < n.length - 1; i++) g.add(n.slice(i, i + 2));
+  if (n.length === 1) g.add(n);
+  return g;
+}
+
+const gramSimilarity = (A, B) => {
   if (!A.size || !B.size) return 0;
+  if (A.size > B.size) [A, B] = [B, A];
   let k = 0;
   for (const x of A) if (B.has(x)) k++;
   return k / (A.size + B.size - k);
-}
+};
+
+// タイトルの似ている度合い（記号を除いた 2 文字ずつの組の重なり。0〜1）
+export const titleSimilarity = (a, b) => gramSimilarity(titleGrams(a), titleGrams(b));
 
 // 同じサイトの 2 つの投稿を同じ作品とみなす似ている度合い（これ未満なら、品番が同じでも別作品）
-const SAME_SITE_SIM = 0.25;
+const SAME_SITE_SIM = 0.4;
 // これより多くの投稿に付いている「品番」は、品番ではなく分類用の語とみなして統合に使わない
 const MAX_CODE_POSTS = 30;
 // 英数字だけの短いタイトル（Raw Passion / Full Service など）は別作品で重なりやすいので、スタジオが同じときだけまとめる
 const weakTitle = (t) => t.length < 20 && !/[^\x00-\x7F]/.test(t);
+// 品番の数字の部分（先頭の 0 は除く）。CAPY-473 と CAPY-0473 は同じ '473'、GT-101 と GT-102 は違う
+const codeNumber = (c) => (c.match(/\d+/g) || []).map((d) => d.replace(/^0+(?=\d)/, '')).join('-');
 
 // 統合に使うタイトルのキー（groupKey と同じ正規化。短すぎるものは null）
 export const titleKeyOf = (title) => { const t = normalizeTitle(title || ''); return t.length >= 10 ? t : null; };
 
-// 投稿（{ key, siteId, code, title, tags, group, codes?, tkey? }。codes / tkey は覚えておいた codesOf / titleKeyOf の結果）をまとめ、投稿の key → 統合キー の Map を返す。
+// 投稿（{ key, siteId, code, title, tags, group, codes?, tkey?, grams? }）をまとめ、投稿の key → 統合キー の Map を返す。
+// codes / tkey / grams は覚えておいた codesOf / titleKeyOf / titleGrams の結果（grams が null なら、計算した値をそこに覚える）。
 // 1. 品番（codesOf: タイトルの品番と品番だけのタグ。どれか 1 つ一致すればよい）が同じ投稿をまとめる
 // 2. 同じタイトル（groupKey と同じ正規化で 10 文字以上）の投稿をまとめる。品番のない投稿は、同じタイトルの品番付きの投稿に合流する。
-//    ただし、そのタイトルに別々の品番が付いているとき（同名の別作品・シリーズ）はまとめない
-// どちらでも、同じサイトの投稿同士でタイトルがまったく違うもの（掲載元の品番の付け間違い、同じ番号の別シリーズ）はまとめない。
-// 統合キーは、まとめた投稿の group のうち品番のもの（なければタイトルのもの）で最も多いもの。重なったら「~投稿の key」を付けて分ける
+//    ただし、そのタイトルに別々の品番が付いているとき（同名の別作品・シリーズの各回）はまとめない。
+//    販売元ごとに番号の振り方が違うだけ（CAPY-473 と KPP-0473 のように接頭辞が違う）のときだけ例外
+// どちらでも、同じサイトの投稿同士は、品番が食い違うもの（同じ接頭辞で数字が違う）・タイトルがまったく違うもの（掲載元の品番の付け間違い、同じ番号の別シリーズ）はまとめない。
+// 投稿の並び順には左右されない（key の順に処理する）。
+// 統合キーは、まとめた投稿の group のうち品番のもの（なければタイトルのもの）で最も多いもの。
+// 別の動画と重なったら、その group を持つ投稿のうち key が最小の投稿を含む動画がそのまま使い、
+// ほかは「~その動画の中で最小の投稿の key」を付けて分ける（投稿の件数や追加の順で持ち主が入れ替わらないように）
 export function clusterPosts(posts) {
   const n = posts.length;
+  const order = Array.from({ length: n }, (_, i) => i).sort((a, b) => (posts[a].key < posts[b].key ? -1 : posts[a].key > posts[b].key ? 1 : 0));
   const parent = Array.from({ length: n }, (_, i) => i);
-  const members = Array.from({ length: n }, (_, i) => [i]);
+  const size = new Array(n).fill(1);
+  // まとまりごとの、サイト → 投稿の一覧（同じサイトの投稿どうしだけ見比べるため）
+  const bySite = posts.map((p, i) => new Map([[p.siteId, [i]]]));
   const find = (i) => { while (parent[i] !== i) i = parent[i] = parent[parent[i]]; return i; };
   const tkey = posts.map((p) => (p.tkey !== undefined ? p.tkey : titleKeyOf(p.title)));
-  const sameWork = (i, j) => (tkey[i] && tkey[i] === tkey[j]) || titleSimilarity(posts[i].title, posts[j].title) >= SAME_SITE_SIM;
+  const codes = posts.map((p) => p.codes || codesOf(p.title || '', p.tags || [], p.code));
+  const G = new Array(n);
+  const gramsOf = (i) => {
+    let g = G[i];
+    if (!g) {
+      const p = posts[i];
+      g = G[i] = p.grams || titleGrams(p.title);
+      if (p.grams === null) p.grams = g;
+    }
+    return g;
+  };
+  const sim = (i, j) => (tkey[i] && tkey[i] === tkey[j] ? 1 : gramSimilarity(gramsOf(i), gramsOf(j)));
+  // 品番が食い違う（共通の品番がなく、同じ接頭辞で数字が違う品番を持つ: GT-101 と GT-102）。
+  // 接頭辞が違うだけ（BOT-0309 と掲載元の番号 VDGBXX0170）なら番号の振り方の違いなので食い違いとはみなさない
+  const parts = codes.map((cs) => cs.map((c) => [c.match(/^[A-Z]*/)[0], codeNumber(c)]));
+  const conflict = (i, j) => {
+    if (!parts[i].length || !parts[j].length || codes[i].some((c) => codes[j].includes(c))) return false;
+    return parts[i].some(([p, n]) => parts[j].some(([q, m]) => p === q && n !== m));
+  };
+  const sameWork = (i, j) => !conflict(i, j) && sim(i, j) >= SAME_SITE_SIM;
   const union = (i, j) => {
     let a = find(i), b = find(j);
     if (a === b) return;
-    for (const x of members[a]) for (const y of members[b]) if (posts[x].siteId === posts[y].siteId && !sameWork(x, y)) return;
-    if (members[a].length < members[b].length) [a, b] = [b, a];
+    if (size[a] < size[b]) [a, b] = [b, a];
+    const A = bySite[a], B = bySite[b];
+    for (const [site, ys] of B) {
+      const xs = A.get(site);
+      if (xs) for (const x of xs) for (const y of ys) if (!sameWork(x, y)) return;
+    }
     parent[b] = a;
-    members[a] = members[a].concat(members[b]);
-    members[b] = null;
+    size[a] += size[b];
+    for (const [site, ys] of B) {
+      const xs = A.get(site);
+      if (xs) for (const y of ys) xs.push(y); else A.set(site, ys);
+    }
+    bySite[b] = null;
   };
 
   // 1. 品番
   const byCode = new Map();
-  posts.forEach((p, i) => {
-    for (const c of p.codes || codesOf(p.title || '', p.tags || [], p.code)) {
+  for (const i of order) {
+    for (const c of codes[i]) {
       let a = byCode.get(c);
       if (!a) byCode.set(c, (a = []));
       a.push(i);
     }
-  });
+  }
   for (const list of byCode.values()) {
     if (list.length < 2 || list.length > MAX_CODE_POSTS) continue;
     // 似ているもの同士から先にまとめる（同じサイトの別作品が先に別の投稿とくっつかないように）
     const pairs = [];
-    for (let x = 0; x < list.length; x++) for (let y = x + 1; y < list.length; y++) {
-      const i = list[x], j = list[y];
-      pairs.push([tkey[i] && tkey[i] === tkey[j] ? 1 : titleSimilarity(posts[i].title, posts[j].title), i, j]);
-    }
+    for (let x = 0; x < list.length; x++) for (let y = x + 1; y < list.length; y++) pairs.push([sim(list[x], list[y]), list[x], list[y]]);
     pairs.sort((a, b) => b[0] - a[0]);
     for (const [, i, j] of pairs) union(i, j);
   }
 
   // 2. タイトル
   const byTitle = new Map();
-  posts.forEach((p, i) => {
-    if (!tkey[i]) return;
+  for (const i of order) {
+    if (!tkey[i]) continue;
     let a = byTitle.get(tkey[i]);
     if (!a) byTitle.set(tkey[i], (a = []));
     a.push(i);
-  });
+  }
   for (const [t, list] of byTitle) {
     if (list.length < 2) continue;
-    // 別々の品番が付いているときは、同名の別作品（シリーズの各巻など）のことが多いのでまとめない。
-    // ただしタイトルが長く、どのサイトでも品番が 1 種類なら、販売元ごとに番号が違うだけの同じ作品（CAPY-473 と KPP-0473 など）とみなす
-    const codes = new Set(list.map((i) => posts[i].code && normalizeCode(posts[i].code)).filter(Boolean));
-    if (codes.size > 1) {
+    // 別々の品番が付いているときは、同名の別作品（シリーズの各回など）のことが多いのでまとめない。
+    // ただしタイトルが長く、どのサイトでも品番が 1 種類で、同じ英字の接頭辞の品番どうしは数字の部分も同じなら、
+    // 販売元ごとに番号の振り方が違うだけの同じ作品（CAPY-473 と KPP-0473、KT83787 と 01-01-0231-01、FC2 と SBM-0137）とみなす。
+    // 同じ接頭辞で数字が違う（GT-101 / GT-102）のは、同じシリーズ名の別の回
+    const codeOf = new Map();
+    for (const i of list) if (posts[i].code) codeOf.set(normalizeCode(posts[i].code), posts[i].code);
+    if (codeOf.size > 1) {
       if (t.length < 15) continue;
+      const numByPrefix = new Map();
+      let series = false;
+      for (const [norm, raw] of codeOf) {
+        const prefix = norm.match(/^[A-Z]*/)[0], num = codeNumber(raw);
+        if (numByPrefix.has(prefix) && numByPrefix.get(prefix) !== num) series = true;
+        numByPrefix.set(prefix, num);
+      }
+      if (series) continue;
       const perSite = new Map();
       for (const i of list) {
-        const c = posts[i].code && normalizeCode(posts[i].code);
-        if (!c) continue;
+        if (!posts[i].code) continue;
         if (!perSite.has(posts[i].siteId)) perSite.set(posts[i].siteId, new Set());
-        perSite.get(posts[i].siteId).add(c);
+        perSite.get(posts[i].siteId).add(normalizeCode(posts[i].code));
       }
       if ([...perSite.values()].some((set) => set.size > 1)) continue;
     }
@@ -225,20 +278,32 @@ export function clusterPosts(posts) {
     }
   }
 
-  // 統合キー
-  const roots = [];
-  for (let i = 0; i < n; i++) if (members[i]) roots.push(i);
-  roots.sort((a, b) => members[b].length - members[a].length || (posts[members[a][0]].key < posts[members[b][0]].key ? -1 : 1));
-  const used = new Set();
-  const out = new Map();
-  for (const r of roots) {
+  // 統合キー（まとまりの投稿は key の順に並ぶ）
+  const members = new Map();
+  for (const i of order) {
+    const r = find(i);
+    let m = members.get(r);
+    if (!m) members.set(r, (m = []));
+    m.push(i);
+  }
+  const rank = (g) => (g.startsWith('code:') ? 2 : g.startsWith('title:') ? 1 : 0);
+  const wants = new Map(); // 統合キー → [{ m, owner: その group を持つ最小の投稿の key }]
+  for (const m of members.values()) {
     const count = new Map();
-    for (const i of members[r]) count.set(posts[i].group, (count.get(posts[i].group) || 0) + 1);
-    const rank = (g) => (g.startsWith('code:') ? 2 : g.startsWith('title:') ? 1 : 0);
-    let key = [...count].sort((a, b) => rank(b[0]) - rank(a[0]) || b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0];
-    if (used.has(key)) key += '~' + members[r].map((i) => posts[i].key).sort()[0];
-    used.add(key);
-    for (const i of members[r]) out.set(posts[i].key, key);
+    for (const i of m) count.set(posts[i].group, (count.get(posts[i].group) || 0) + 1);
+    const key = [...count].sort((a, b) => rank(b[0]) - rank(a[0]) || b[1] - a[1] || (a[0] < b[0] ? -1 : 1))[0][0];
+    const owner = posts[m.find((i) => posts[i].group === key)].key;
+    let w = wants.get(key);
+    if (!w) wants.set(key, (w = []));
+    w.push({ m, owner });
+  }
+  const out = new Map();
+  for (const [key, list] of wants) {
+    list.sort((a, b) => (a.owner < b.owner ? -1 : 1));
+    list.forEach(({ m }, x) => {
+      const k = x === 0 ? key : key + '~' + posts[m[0]].key;
+      for (const i of m) out.set(posts[i].key, k);
+    });
   }
   return out;
 }
@@ -252,7 +317,6 @@ const GENERIC_TERM = /^(japan(ese)? (movies|gay scenes|av scenes)|western movies
 // 同じレーベルの別表記（studioKey の形 → 正式なほうの studioKey）。
 // 3 サイトの全投稿で、同じ作品に付いたレーベル名の組み合わせから見つけたもの
 const STUDIO_ALIASES = new Map(Object.entries({
-  games: 'gmes', // GAMES → G@MES
   西麻布撮影所: 'nishiazabufilmstudio',
   ko裸王raoh: 'koraoh',
   プリズム: 'prism',
@@ -263,12 +327,18 @@ const STUDIO_ALIASES = new Map(Object.entries({
   bbvideos: 'bbvideo',
   mensberaker: 'mensbreaker', // 掲載元の綴り誤り
   boystuido: 'boystudio',
-  kocompany: 'ko', // KO COMPANY と、gayvidsclub のカテゴリ「KO」
   コニーキャラバン: 'conycaracan',
   // 販売元の自社作品のタグは販売元にまとめる
   hunkオリジナル: 'hunkchannel',
   ckオリジナル: 'ckdownload',
   kotubeオリジナル: 'kotube',
+}));
+
+// 一般的な語と重なる別表記は、掲載元の書き方（大文字だけ）と完全に同じときだけ使う（trim した表記 → 正式なほうの studioKey）。
+// 洋物の「Games」「KO（ノックアウト）」のようなタグを G@MES / KO COMPANY に寄せないため
+const CASED_ALIASES = new Map(Object.entries({
+  GAMES: 'gmes', // javboys の GAMES → G@MES
+  KO: 'kocompany', // gayvidsclub のカテゴリ「KO」→ KO COMPANY
 }));
 
 // 表記ゆれのあるスタジオ名（MEN'S RUSH.TV / Men's Rush.TV / Men’s Rush.TV、G@MES / GAMES）を同じものとして扱うためのキー
@@ -278,7 +348,7 @@ export function studioKey(name) {
   let k = studioKeyCache.get(name);
   if (k === undefined) {
     k = normalizeTitle(name);
-    k = STUDIO_ALIASES.get(k) || k;
+    k = CASED_ALIASES.get(name.trim()) || STUDIO_ALIASES.get(k) || k;
     if (studioKeyCache.size > 50000) studioKeyCache.clear();
     studioKeyCache.set(name, k);
   }
