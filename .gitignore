@@ -6,3 +6,6 @@ server/server.log
 
 # エージェントの作業用 worktree
 .claude/worktrees/
+
+# 分析・計測用の一時データ
+.data/
