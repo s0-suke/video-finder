@@ -22,7 +22,7 @@ const CHIP_STUDIOS = 15;
 
 // view: '' = すべて / 'new' = 新着 / 'fav' = お気に入り / 'history' = 履歴
 const saved = (() => { try { return JSON.parse(localStorage.getItem('filters3') || '{}'); } catch { return {}; } })();
-// dateBy: 'post' = 各サイトの掲載日 / 'release' = 元動画の発売日（目安。release.js）
+// dateBy: 'post' = 各サイトの掲載日 / 'release' = 元動画の発売日（目安。release.js。推定した日付も同じように並べ、カードでは「頃」を付ける）
 export const filters = { q: '', studio: '', site: '', sort: 'new', dateBy: 'post', view: '', hideNoThumb: false, ...saved };
 let filtered = [];
 let shown = 0;
@@ -87,7 +87,7 @@ function cardHTML(v, i) {
     </div>
     ${feature('history') && viewedAt(v.key) ? '<span class="watched">視聴済み</span>' : ''}
     <div class="title">${esc(v.title)}</div>
-    <div class="sub">${filters.dateBy === 'release' ? (v.release ? '発売 ' + esc(shortDate(v.release)) : '発売日不明') : esc(shortDate(v.date))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
+    <div class="sub">${filters.dateBy === 'release' ? (v.release ? '発売 ' + esc(shortDate(v.release)) + (v.releaseSrc === 'estimate' ? '頃' : '') : '発売日不明') : esc(shortDate(v.date))}${v.studio ? ' · ' + esc(v.studio) : ''}</div>
   </button>`;
 }
 
