@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.13.1';
+export const VERSION = '1.13.2';
 
 export const CHANGELOG = [
+  {
+    version: '1.13.2',
+    date: '2026-11-12',
+    items: [
+      'ミニプレイヤーを、タブバーに合わせたぼかしのある半透明にした（角も少し丸く）',
+    ],
+  },
   {
     version: '1.13.1',
     date: '2026-11-12',

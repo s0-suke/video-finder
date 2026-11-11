@@ -34,8 +34,10 @@
   /* bottom は sheet.js がタブバーの高さを測って入れる */
   top: auto; left: 8px; right: 8px; z-index: 15; height: 64px; max-height: none;
   display: flex; flex-direction: row; align-items: center; gap: 0; padding: 0; overflow: hidden;
-  border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border);
-  box-shadow: 0 6px 20px rgba(0,0,0,.45);
+  border-radius: 16px; border: 1px solid rgba(255,255,255,.08);
+  /* ネイティブのタブバー（ガラス調）に合わせて、ぼかしのある半透明にする */
+  background: rgba(35,35,40,.72); -webkit-backdrop-filter: blur(24px) saturate(1.5); backdrop-filter: blur(24px) saturate(1.5);
+  box-shadow: 0 8px 24px rgba(0,0,0,.45);
   transform: none; animation: mini-in .22s ease;
 }
 @media (min-width: 720px) { .sheet.mini { left: 50%; right: auto; width: 480px; margin-left: -240px; } }
