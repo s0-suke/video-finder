@@ -112,8 +112,9 @@ export function openStudioPicker() {
   };
   paint();
   q.addEventListener('input', paint);
-  // 開いたらすぐ入力できるようにする（タップの処理の中で focus するので iOS でもキーボードが出る）
-  q.focus({ preventScroll: true });
+  // マウス・キーボードの端末では、開いたらすぐ入力できるようにする。
+  // タッチ端末では、キーボードが一覧の半分を覆って、親子の一覧が見づらくなるので、検索欄をタップしたときに出す
+  if (!matchMedia('(pointer: coarse)').matches) q.focus({ preventScroll: true });
   list.onclick = (e) => {
     const t = e.target.closest('[data-toggle]');
     if (t) {

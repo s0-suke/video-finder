@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.11.1';
+export const VERSION = '1.11.2';
 
 export const CHANGELOG = [
+  {
+    version: '1.11.2',
+    date: '2026-11-12',
+    items: [
+      'スタジオ一覧を開いたとき、タッチ端末（iPhone など）では検索欄にすぐ入力できる状態にしない。キーボードが一覧の半分を覆って、親子の一覧が見づらかったため。検索したいときは検索欄をタップする',
+    ],
+  },
   {
     version: '1.11.1',
     date: '2026-11-12',
