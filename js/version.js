@@ -6,9 +6,17 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.12.0';
+export const VERSION = '1.12.1';
 
 export const CHANGELOG = [
+  {
+    version: '1.12.1',
+    date: '2026-11-12',
+    items: [
+      '指で押す部分（検索欄・絞り込みボタン・チップ・×）の押せる範囲を、Apple の基準（44pt 以上）に広げた。見た目はほとんど変わらない',
+      '最初から登録しておくサイトを、あとから足せるようにした（以前は初回起動のときだけ登録していたので、使い始めた端末には届かなかった）。削除したサイトは戻さない',
+    ],
+  },
   {
     version: '1.12.0',
     date: '2026-11-12',

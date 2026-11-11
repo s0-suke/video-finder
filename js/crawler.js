@@ -26,12 +26,31 @@ const DEV = new URLSearchParams(location.search).has('dev');
 
 const termCache = new Map(); // `${siteId}:${termId}` -> name
 
+// 1.12 より前の版の既定のサイト（seededDefaults を持たない端末は、これを登録済みとして扱う）
+const LEGACY_DEFAULTS = ['https://gayvidsclub.com/', 'https://poapan.xyz/', 'https://javboys.com/'];
+
 export async function initCrawler() {
   for (const t of await db.getAll('terms')) termCache.set(t.key, t.name);
-  if (!state.sites.length && !(await db.kvGet('initialized', false))) {
-    for (const u of DEFAULT_SITES) await addSite(u, { verify: false });
-    await db.kvSet('initialized', true);
+  await seedDefaultSites();
+}
+
+// 既定のサイトを登録する。「登録したことのある既定のサイト」を覚えておき、まだのものだけを足す。
+// （以前は初回だけだったので、あとから既定に足しても、既に使っている端末には届かなかった）
+// 利用者が削除したサイトは、覚えているので戻さない。
+async function seedDefaultSites() {
+  let seeded = await db.kvGet('seededDefaults', null);
+  if (!seeded) {
+    // 古い版から上がってきた端末: 初期化済みなら、そのときの既定 3 つは登録したことにする（削除されていても戻さない）
+    seeded = (await db.kvGet('initialized', false)) || state.sites.length ? LEGACY_DEFAULTS.slice() : [];
   }
+  const todo = DEFAULT_SITES.filter((u) => !seeded.includes(u));
+  if (!todo.length && (await db.kvGet('seededDefaults', null))) return;
+  for (const u of todo) {
+    if (!state.sites.some((s) => s.url === u)) await addSite(u, { verify: false }).catch(() => {});
+    seeded.push(u);
+  }
+  await db.kvSet('seededDefaults', seeded);
+  await db.kvSet('initialized', true);
 }
 
 // タグ・カテゴリ名とサムネイル URL を、投稿 100 件分まとめて引く

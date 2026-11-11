@@ -5,7 +5,8 @@
 // ?dev と一緒に使う（例: http://localhost:8790/?dev&selftest）。試験で変えた状態（絞り込み・お気に入り）は最後に元に戻す。
 
 import { $, $$ } from './util.js';
-import { state } from './data.js';
+import { state, DEFAULT_SITES } from './data.js';
+import * as db from './db.js';
 import { filters, saveFilters, render, renderChips, setActor } from './ui/list.js';
 import { recentKeys } from './history.js';
 import { isSheetOpen, miniPlayer } from './ui/sheet.js';
@@ -269,6 +270,12 @@ export async function runSelftest() {
     tab(''); await wait(300);
   });
 
+  await check('既定のサイトを登録済みとして覚えている（あとから既定に足したサイトを、一度だけ登録するため）', async () => {
+    const seeded = await db.kvGet('seededDefaults', null);
+    assert(Array.isArray(seeded), 'seededDefaults が記録されていない');
+    for (const u of DEFAULT_SITES) assert(seeded.includes(u), `${u} が登録済みの記録にない`);
+  });
+
   await check('想定外の例外が出ていない', () => {
     // Service Worker の登録失敗（確認用ブラウザの制約）は除く
     const real = errors.filter((m) => !/ServiceWorker|fetching the script/i.test(m));
@@ -284,7 +291,7 @@ export async function runSelftest() {
   const failed = results.length - passed;
   window.__selftest = { done: true, passed, failed, results };
   const box = document.createElement('div');
-  box.style.cssText = `position:fixed;top:8px;right:8px;z-index:99;max-width:300px;padding:10px;border-radius:10px;font-size:11px;line-height:1.5;background:${failed ? '#5a1d24' : '#1d4a2c'};color:#fff;white-space:pre-wrap`;
+  box.style.cssText = `position:fixed;top:calc(env(safe-area-inset-top) + 8px);right:8px;z-index:99;max-width:300px;padding:10px;border-radius:10px;font-size:11px;line-height:1.5;background:${failed ? '#5a1d24' : '#1d4a2c'};color:#fff;white-space:pre-wrap`;
   box.textContent = `selftest: ${passed} 件成功 / ${failed} 件失敗\n` + results.filter((r) => !r.ok).map((r) => `✗ ${r.name}: ${r.detail}`).join('\n');
   box.onclick = () => box.remove();
   document.body.appendChild(box);

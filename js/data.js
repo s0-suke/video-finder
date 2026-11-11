@@ -58,6 +58,10 @@ function codeTag(t) {
   return r;
 }
 
+// 最初から登録しておくサイト。
+// 新しいサイトを足すときは、ここに追加するだけでよい（crawler.js の initCrawler が、まだ登録したことのない既定のサイトを
+// 一度だけ登録する。利用者が設定で削除したサイトは、二度と自動では戻さない）。
+// 足す前に、ブラウザから取得できる（WordPress の REST API が開いていて、CORS が許可されている）ことを確かめる。
 export const DEFAULT_SITES = [
   'https://gayvidsclub.com/',
   'https://poapan.xyz/',
