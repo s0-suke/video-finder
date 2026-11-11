@@ -81,7 +81,7 @@ function sectionHTML({ s, fav }) {
       <button class="sf-title" data-open="${esc(s.key)}"><span class="sf-name">${esc(s.name)}</span><small>${s.total.toLocaleString()} 本${kids ? ` · ${kids} レーベル` : ''}</small></button>
       <button class="sf-all" data-open="${esc(s.key)}" aria-label="${esc(s.name)}をすべて見る">すべて ›</button>
     </div>
-    <div class="sf-row">${vids.map(cardHTML).join('')}</div>
+    <div class="sf-row">${vids.map(cardHTML).join('')}${s.total > vids.length ? `<button class="sf-more" data-open="${esc(s.key)}" aria-label="${esc(s.name)}をすべて見る"><span>すべて見る</span><b>${s.total.toLocaleString()} 本 ›</b></button>` : ''}</div>
   </section>`;
 }
 

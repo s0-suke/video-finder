@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.13.0';
+export const VERSION = '1.13.1';
 
 export const CHANGELOG = [
+  {
+    version: '1.13.1',
+    date: '2026-11-12',
+    items: [
+      'スタジオのタブのカルーセルの最後に「すべて見る」のカードを足した（そのスタジオの動画の総数つき）',
+    ],
+  },
   {
     version: '1.13.0',
     date: '2026-11-12',
