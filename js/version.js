@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.11.2';
+export const VERSION = '1.11.3';
 
 export const CHANGELOG = [
+  {
+    version: '1.11.3',
+    date: '2026-11-12',
+    items: [
+      'スタジオ一覧のキーボード: タッチ端末かどうかを、タッチ点の数でも判定するようにした（1.11.2 では判定が足りず、キーボードが出る場合があった）',
+    ],
+  },
   {
     version: '1.11.2',
     date: '2026-11-12',

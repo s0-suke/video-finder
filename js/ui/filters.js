@@ -114,7 +114,8 @@ export function openStudioPicker() {
   q.addEventListener('input', paint);
   // マウス・キーボードの端末では、開いたらすぐ入力できるようにする。
   // タッチ端末では、キーボードが一覧の半分を覆って、親子の一覧が見づらくなるので、検索欄をタップしたときに出す
-  if (!matchMedia('(pointer: coarse)').matches) q.focus({ preventScroll: true });
+  const touch = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
+  if (!touch) q.focus({ preventScroll: true });
   list.onclick = (e) => {
     const t = e.target.closest('[data-toggle]');
     if (t) {
