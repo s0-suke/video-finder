@@ -251,8 +251,11 @@ export async function runSelftest() {
       const target = secs[Math.min(2, secs.length - 1)];
       const key = target.dataset.key;
       target.querySelector('[data-fav]').click(); await wait(400);
-      assert($('#studio-feed .sf').dataset.key === key, 'お気に入りにしたスタジオが一番上に来ない');
       assert(JSON.parse(localStorage.getItem('vfFavStudios') || '{}')[key], 'お気に入りが保存されない');
+      assert(target.querySelector('.sf-star.on'), '☆ が ★ にならない');
+      // 並べ替えは次に開いたときに反映される（押した行が画面から消えないように）
+      tab(''); await wait(300); tab('studios'); await wait(600);
+      assert($('#studio-feed .sf').dataset.key === key, 'お気に入りにしたスタジオが、開き直したとき一番上に来ない');
       // カードを押すと詳細が開く
       $('#studio-feed .sf .card').click();
       assert(await until(() => isSheetOpen()), 'カードを押しても詳細が開かない');

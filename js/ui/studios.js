@@ -94,6 +94,24 @@ function paint(reset = true) {
   $('#studio-empty').classList.toggle('hidden', order.length > 0);
 }
 
+/** 作り直す。いまのスクロール位置と、ここまでに作った数を保つ（収集が進むたびに呼ばれても、位置が飛ばないように） */
+function repaint() {
+  const y = window.scrollY;
+  const keep = Math.max(shown, FIRST);
+  paint();
+  while (shown < keep && shown < order.length) paint(false);
+  window.scrollTo(0, y);
+}
+
+/** ☆ の表示だけを更新する（並べ替えは、次に開いたときに反映する。押した行が画面から消えないように） */
+function markStar(key, on) {
+  const star = $(`#studio-feed .sf[data-key="${CSS.escape(key)}"] .sf-star`);
+  if (!star) return;
+  star.classList.toggle('on', on);
+  star.textContent = on ? '★' : '☆';
+  star.setAttribute('aria-label', on ? 'お気に入りから外す' : 'お気に入りにする');
+}
+
 /** ホームの一覧へ移る（タブの切り替えは履歴に積まない） */
 function goHomeWith(key) {
   filters.studio = key;
@@ -122,9 +140,7 @@ function init() {
       if (key in favs) delete favs[key]; else favs[key] = s ? s.name : key;
       saveFavs(favs);
       toast(key in favs ? `★ ${favs[key]} をお気に入りにしました` : `${s ? s.name : key} をお気に入りから外しました`);
-      const y = window.scrollY;
-      paint();
-      window.scrollTo(0, y);
+      markStar(key, key in favs);
       return;
     }
     const open = e.target.closest('[data-open]');
@@ -138,7 +154,7 @@ function init() {
     }
   });
   // 収集が進んだら、開いている間は描き直す（スクロール位置は保つ）
-  on('data', () => { if (isStudiosOpen()) { const y = window.scrollY; paint(); window.scrollTo(0, y); } });
+  on('data', () => { if (isStudiosOpen()) repaint(); });
 }
 
 /** ページを開いたとき（main.js の route から） */

@@ -46,7 +46,10 @@ async function seedDefaultSites() {
   const todo = DEFAULT_SITES.filter((u) => !seeded.includes(u));
   if (!todo.length && (await db.kvGet('seededDefaults', null))) return;
   for (const u of todo) {
-    if (!state.sites.some((s) => s.url === u)) await addSite(u, { verify: false }).catch(() => {});
+    if (!state.sites.some((s) => s.url === u)) {
+      // 登録に失敗したもの（書き込みエラーなど）は「登録済み」にしない。次の起動でもう一度試す
+      try { await addSite(u, { verify: false }); } catch (e) { if (!/登録済み/.test(String(e && e.message))) continue; }
+    }
     seeded.push(u);
   }
   await db.kvSet('seededDefaults', seeded);

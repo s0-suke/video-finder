@@ -6,9 +6,17 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.13.2';
+export const VERSION = '1.13.3';
 
 export const CHANGELOG = [
+  {
+    version: '1.13.3',
+    date: '2026-11-12',
+    items: [
+      'スタジオのタブ: 収集が進んで一覧が更新されても、スクロール位置と読み込み済みの行が失われないようにした。☆ を押しても、その行が画面から消えない（並び替えは次に開いたときに反映）',
+      '最初から登録するサイトの登録に失敗したときは、「登録済み」とせず、次の起動でもう一度試す',
+    ],
+  },
   {
     version: '1.13.2',
     date: '2026-11-12',
