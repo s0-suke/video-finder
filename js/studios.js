@@ -120,6 +120,12 @@ const PREFIX_PARENTS = [
   { test: /^KO\s\S/i, parent: 'KO COMPANY' }, // 「KO BEAST」など。単独の「KO」は KO COMPANY そのもの（studioKey の別名）
 ];
 
+// 親子関係はないが、公式サイトの表記がはっきりしているスタジオの名前。掲載元では「Acceed」のように大文字小文字がぶれるので、
+// 一覧・チップには公式の表記を出す（studioKey は同じなので、動画の振り分けには影響しない）
+const OFFICIAL_NAMES = [
+  'ACCEED', // acceed.jp のサイト名の表記
+];
+
 // ---- 表の展開（最初に使うときに 1 回だけ）----
 let built = null;
 
@@ -139,7 +145,8 @@ function build() {
   };
   for (const root of TREE) register(root, null);
   const prefixParents = PREFIX_PARENTS.map((r) => ({ test: r.test, key: studioKey(r.parent) }));
-  built = { parentOf, displayName, notes, prefixParents };
+  const officialName = new Map(OFFICIAL_NAMES.map((n) => [studioKey(n), n]));
+  built = { parentOf, displayName, notes, prefixParents, officialName };
   return built;
 }
 
@@ -192,7 +199,7 @@ export const studioNote = (key) => build().notes.get(key) || '';
  * 並べ替えは呼び出し側で行う（total の順）
  */
 export function buildStudioTree(studios) {
-  const { displayName } = build();
+  const { displayName, officialName } = build();
   const byKey = new Map(studios.map((s) => [s.key, { ...s, parent: '', total: s.count, children: [] }]));
   const ensure = (key) => {
     if (!byKey.has(key)) byKey.set(key, { key, name: displayName.get(key) || key, count: 0, virtual: true, parent: '', total: 0, children: [] });
@@ -217,6 +224,8 @@ export function buildStudioTree(studios) {
   const out = [...byKey.values()];
   // 親の名前は表の正式な名前にする（掲載元では「KO」と付くことが多いが、親としては「KO COMPANY」と出す）
   for (const s of out) if (s.children.length && displayName.has(s.key)) s.name = displayName.get(s.key);
+  // 公式の表記がはっきりしているものは、その表記にそろえる
+  for (const s of out) if (officialName.has(s.key)) s.name = officialName.get(s.key);
   // 子は total の多い順
   for (const s of out) s.children.sort((x, y) => byKey.get(y).total - byKey.get(x).total);
   return out;

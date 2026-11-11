@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.11.0';
+export const VERSION = '1.11.1';
 
 export const CHANGELOG = [
+  {
+    version: '1.11.1',
+    date: '2026-11-12',
+    items: [
+      'スタジオ名の表記を、公式サイトの表記にそろえた（ACCEED）。掲載元では「Acceed」のように大文字小文字がぶれて出ていた',
+    ],
+  },
   {
     version: '1.11.0',
     date: '2026-11-11',

@@ -116,3 +116,8 @@ test('親の循環がない（祖先をたどって止まる）', () => {
     assert.ok(!anc.includes(k(name)), `${name} が自分の祖先に入っている`);
   }
 });
+
+test('公式の表記がはっきりしているスタジオは、その表記で出す（掲載元の大文字小文字のぶれを直す）', () => {
+  const tree = buildStudioTree([{ key: k('Acceed'), name: 'Acceed', count: 3 }]);
+  assert.equal(tree.find((s) => s.key === k('ACCEED')).name, 'ACCEED');
+});
