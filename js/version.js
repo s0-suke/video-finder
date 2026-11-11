@@ -6,9 +6,17 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.12.1';
+export const VERSION = '1.13.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.13.0',
+    date: '2026-11-12',
+    items: [
+      'スタジオのタブを、スタジオごとの「名前 + 最新の動画のカルーセル」を縦に並べたページにした。カードを押すと詳細、名前や「すべて ›」を押すとそのスタジオのホームになる。親（会社・メーカー）の動画には、子のレーベルの分も含まれる',
+      'スタジオの ☆ を押すとお気に入りになり、スタジオのタブの一番上に並ぶ（ホームのチップと同じお気に入り）。上の検索欄でスタジオ名を探せる。右上のボタンから、親子の入れ子の一覧も開ける',
+    ],
+  },
   {
     version: '1.12.1',
     date: '2026-11-12',

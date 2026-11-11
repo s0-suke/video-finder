@@ -342,10 +342,19 @@ details.more[open] summary { margin-bottom: 4px; }
 .seg.hidden { display: none; }
 .seg button { flex: 1; height: 32px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 13px; font-weight: 600; }
 .seg button.on { background: #3a3a40; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
-/* スタジオのページ（シートと同じ一覧を、画面いっぱいに出す） */
-#view-studios .picker-q { position: sticky; top: 0; z-index: 2; }
-
-/* タップ領域を 44pt に広げる（見た目の大きさは変えない。Apple の HIG） */
-.chip, .cond { position: relative; }
-.chip::after, .cond::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
-.seg button { height: 36px; }
+/* スタジオのタブ: スタジオごとの名前 + 最新動画のカルーセルを縦に並べる */
+.sf { padding: 14px 0 4px; }
+.sf-head { display: flex; align-items: center; gap: 2px; padding: 0 12px 0 4px; }
+.sf-star { flex: none; width: 44px; height: 44px; background: none; border: 0; color: var(--muted); font-size: 20px; }
+.sf-star.on { color: var(--accent); }
+.sf-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; background: none; border: 0; padding: 8px 0; text-align: left; color: var(--text); }
+.sf-name { font-size: 18px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-title small { flex: none; color: var(--muted); font-size: 12px; }
+.sf-all { flex: none; min-height: 44px; padding: 0 4px 0 10px; background: none; border: 0; color: var(--accent); font-size: 14px; }
+.sf-row {
+  display: flex; gap: 10px; overflow-x: auto; padding: 4px 12px 6px; scroll-snap-type: x proximity; scrollbar-width: none;
+  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+}
+.sf-row::-webkit-scrollbar { display: none; }
+.sf-row .card { flex: none; width: 168px; scroll-snap-align: start; }
+.sf-row .title { font-size: 13px; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
