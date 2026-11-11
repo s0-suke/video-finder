@@ -78,6 +78,17 @@ export function openStudioPicker() {
     <input class="picker-q" type="search" placeholder="スタジオ名で探す" autocomplete="off">
     <div class="picker-list"></div>
   `);
+  mountStudioPicker(el, (key) => {
+    filters.studio = key;
+    saveFilters(); renderChips(); closeSheet(); render();
+  });
+}
+
+/**
+ * スタジオ一覧を el の中に作る（el に .picker-q と .picker-list が入っていること）。
+ * シート（openStudioPicker）とスタジオのページ（ui/studios.js）で共有する。選ばれたら onPick(key。「すべて」は ''）
+ */
+export function mountStudioPicker(el, onPick) {
   const q = el.querySelector('.picker-q');
   const list = el.querySelector('.picker-list');
   const row = (s, { depth = 0, via = '' } = {}) => {
@@ -125,7 +136,7 @@ export function openStudioPicker() {
     }
     const b = e.target.closest('[data-key]');
     if (!b) return;
-    filters.studio = b.dataset.key;
-    saveFilters(); renderChips(); closeSheet(); render();
+    onPick(b.dataset.key);
   };
+  return paint;
 }

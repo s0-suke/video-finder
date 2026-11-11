@@ -16,7 +16,7 @@ const MAX = 12;
 let items = [];
 
 const visible = () =>
-  feature('continueRow') && feature('history') && location.hash !== '#settings' &&
+  feature('continueRow') && feature('history') && !location.hash &&
   !filters.view && !filters.q && !filters.studio && !filters.site && !filters.actor;
 
 export function renderContinue() {

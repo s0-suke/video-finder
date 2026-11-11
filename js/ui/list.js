@@ -345,7 +345,7 @@ export function initList() {
   const ptr = $('#ptr');
   let pullStart = null, pulled = 0;
   addEventListener('touchstart', (e) => {
-    pullStart = feature('pullRefresh') && !e.target.closest('#dock, .suggest') && window.scrollY <= 0 && !isSheetOpen() && location.hash !== '#settings' ? e.touches[0].clientY : null;
+    pullStart = feature('pullRefresh') && !e.target.closest('#dock, .suggest') && window.scrollY <= 0 && !isSheetOpen() && !location.hash ? e.touches[0].clientY : null;
   }, { passive: true });
   addEventListener('touchmove', (e) => {
     if (pullStart == null) return;
@@ -368,11 +368,11 @@ export function initList() {
   on('data', () => {
     if (dropStaleFilters()) saveFilters();
     renderChips();
-    if (location.hash !== '#settings' && !isSheetOpen() && window.scrollY < 300) render();
+    if (!location.hash && !isSheetOpen() && window.scrollY < 300) render();
   });
   // お気に入り・履歴が変わったら、絞り込み中なら描き直し、そうでなければ該当カードだけ更新する
   const refresh = (view) => () => {
-    if (location.hash === '#settings') return;
+    if (location.hash) return;
     if (filters.view === view) return render();
     for (const card of $('#grid').querySelectorAll('.card')) {
       const v = filtered[+card.dataset.i];

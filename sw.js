@@ -40,6 +40,7 @@ const SHELL = [
   './js/ui/detail.js',
   './js/ui/filters.js',
   './js/ui/settings.js',
+  './js/ui/studios.js',
   './js/ui/tabbar.js',
   './js/ui/continue.js',
   './js/actor.js',

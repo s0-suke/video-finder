@@ -1,4 +1,4 @@
-// 起動処理とルーティング（#settings で設定画面、それ以外は一覧）
+// 起動処理とルーティング（#settings で設定画面、#studios でスタジオのページ、それ以外は一覧）
 
 import { $, toast } from './util.js';
 import { openDB } from './db.js';
@@ -17,15 +17,20 @@ import { initList, render, renderChips, saveFilters, dropStaleFilters } from './
 import { openFilters } from './ui/filters.js';
 import { initSettings, openSettings } from './ui/settings.js';
 import { initTabbar } from './ui/tabbar.js';
+import { openStudios } from './ui/studios.js';
 import { initContinue } from './ui/continue.js';
 
 function route() {
   const settings = location.hash === '#settings';
-  $('#view-list').classList.toggle('hidden', settings);
+  const studios = location.hash === '#studios';
+  $('#view-list').classList.toggle('hidden', settings || studios);
   $('#view-settings').classList.toggle('hidden', !settings);
+  $('#view-studios').classList.toggle('hidden', !studios);
   hideSheet();
   window.scrollTo(0, 0);
-  if (settings) openSettings(); else render();
+  if (settings) openSettings();
+  else if (studios) openStudios();
+  else render();
 }
 
 // iPhone の Safari で開いているときだけ、ホーム画面への追加を案内する（閉じたら出さない）
@@ -76,7 +81,7 @@ async function boot() {
     if (!feature('installTip')) $('#install-tip').classList.add('hidden');
     if (!feature('backfillBanner')) $('#banner').classList.add('hidden');
     renderChips();
-    if (location.hash !== '#settings') render();
+    if (!location.hash) render();
   });
   dropStaleFilters();
   saveFilters();

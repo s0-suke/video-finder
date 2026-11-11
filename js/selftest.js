@@ -17,6 +17,7 @@ async function until(fn, ms = 6000) {
   return false;
 }
 const tab = (t) => $(`#tabbar [data-tab="${t}"]`).click();
+const lib = (v) => $(`#lib-seg [data-view="${v}"]`).click(); // お気に入り｜履歴 の切り替え
 const back = async () => { history.back(); await wait(400); };
 const typeQuery = async (q) => {
   const input = $('#q');
@@ -82,8 +83,10 @@ export async function runSelftest() {
   await check('タブの切り替え（お気に入り・履歴・設定・ホーム）', async () => {
     tab('fav'); await wait(300);
     assert(filters.view === 'fav', 'お気に入りタブ');
-    tab('history'); await wait(300);
-    assert(filters.view === 'history', '履歴タブ');
+    assert(!$('#lib-seg').classList.contains('hidden'), 'お気に入りの切り替え（お気に入り｜履歴）が出ない');
+    lib('history'); await wait(300);
+    assert(filters.view === 'history', '履歴の切り替え');
+    assert($('#tabbar [data-tab="fav"]').classList.contains('on'), '履歴のときも、お気に入りのタブが選ばれたまま');
     tab('settings'); await wait(500);
     assert(!$('#view-settings').classList.contains('hidden'), '設定が出ない');
     assert($$('#settings-extra .section-title').length >= 3, '設定の項目が足りない');
@@ -228,6 +231,26 @@ export async function runSelftest() {
     cond.click(); await wait(300);
     assert(!filters.actor && $$('#grid .card').length > vs.length, '外れない');
     assert(!JSON.parse(localStorage.getItem('filters3') || '{}').actor, '出演者の絞り込みが保存されている');
+  });
+
+  await check('スタジオのタブ: 親子の一覧が出て、選ぶとそのスタジオのホームになる', async () => {
+    const parent = state.studios.find((s) => !s.parent && s.children.length);
+    if (!parent) return '子のあるスタジオがない（省略）';
+    tab('studios'); await wait(500);
+    assert(!$('#view-studios').classList.contains('hidden') && $('#view-list').classList.contains('hidden'), 'スタジオのページが出ない');
+    assert($('#tabbar [data-tab="studios"]').classList.contains('on'), 'スタジオのタブが選ばれていない');
+    const row = $(`#view-studios .picker-row[data-key="${parent.key}"]`);
+    assert(row, '親の行がない');
+    const tog = $(`#view-studios .picker-toggle[data-toggle="${parent.key}"]`);
+    assert(tog, '親に開閉の印がない');
+    // 開閉は覚えている（絞り込みのシートと共通）ので、閉じているときだけ押す
+    if (!tog.classList.contains('open')) { tog.click(); await wait(200); }
+    assert($(`#view-studios .picker-row[data-key="${parent.children[0]}"]`), '開いても子が出ない');
+    $(`#view-studios .picker-row[data-key="${parent.key}"]`).click(); await wait(500);
+    assert($('#view-studios').classList.contains('hidden') && !$('#view-list').classList.contains('hidden'), 'ホームの一覧に戻らない');
+    assert(filters.studio === parent.key && filters.view === '', 'スタジオで絞り込まれていない');
+    assert($('#tabbar [data-tab=""]').classList.contains('on'), 'ホームのタブが選ばれていない');
+    filters.studio = ''; saveFilters(); renderChips(); render();
   });
 
   await check('ホームに最近見た動画が出て、タップで詳細が開く', async () => {

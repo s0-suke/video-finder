@@ -6,9 +6,17 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.11.3';
+export const VERSION = '1.12.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.12.0',
+    date: '2026-11-12',
+    items: [
+      'タブバーを「ホーム / 新着 / スタジオ / お気に入り / 設定」に変えた。新しく「スタジオ」のタブで、レーベル・メーカーを親子の入れ子で一覧にしたページが開き、選ぶとそのスタジオのホームになる（今までは絞り込みのシートの中だけだった）',
+      '履歴は「お気に入り」のタブの中の切り替え（お気に入り｜履歴）に入れた。お気に入りのタブは、最後に見ていたほうを開く。ホームの「最近見た動画」の「履歴 ›」からも開ける',
+    ],
+  },
   {
     version: '1.11.3',
     date: '2026-11-12',
