@@ -32,7 +32,33 @@ let order = []; // 並べるスタジオ（{ s（スタジオ）, fav }）
 let shown = 0;
 let built = false;
 
-/** 並べるスタジオ: 検索中は名前が当てはまるもの、そうでなければ お気に入り → 親（動画の多い順） */
+const SORT_KEY = 'studioSort';
+const loadSort = () => { try { return localStorage.getItem(SORT_KEY) === 'new' ? 'new' : 'many'; } catch { return 'many'; } };
+
+/** 親（根）のスタジオを、最新の動画が新しい順に並べた key の一覧。state.videos は新しい順なので、先頭から最初に出てきた順になる */
+function rootsByNewest() {
+  const byKey = new Map(state.studios.map((s) => [s.key, s]));
+  const rootOf = new Map();
+  const root = (k) => {
+    if (rootOf.has(k)) return rootOf.get(k);
+    let cur = k;
+    const seen = new Set();
+    for (let s = byKey.get(cur); s && s.parent && !seen.has(cur); s = byKey.get(cur)) { seen.add(cur); cur = s.parent; }
+    rootOf.set(k, cur);
+    return cur;
+  };
+  const wanted = state.studios.filter((s) => !s.parent && s.total > 0).length;
+  const out = [];
+  const seenRoot = new Set();
+  for (const v of state.videos) {
+    if (!v.studioKey) continue;
+    const r = root(v.studioKey);
+    if (!seenRoot.has(r)) { seenRoot.add(r); out.push(r); if (out.length >= wanted) break; }
+  }
+  return out;
+}
+
+/** 並べるスタジオ: 検索中は名前が当てはまるもの、そうでなければ お気に入り → 親（動画の多い順 / 最新の動画が新しい順） */
 function buildOrder() {
   const favs = loadFavs();
   const byKey = new Map(state.studios.map((s) => [s.key, s]));
@@ -47,7 +73,10 @@ function buildOrder() {
     const s = byKey.get(k);
     if (s && !seen.has(k)) { out.push({ s, fav: true }); seen.add(k); }
   }
-  for (const s of state.studios) if (!s.parent && s.total > 0 && !seen.has(s.key)) out.push({ s, fav: false });
+  const roots = loadSort() === 'new'
+    ? rootsByNewest().map((k) => byKey.get(k)).filter(Boolean)
+    : state.studios.filter((s) => !s.parent && s.total > 0);
+  for (const s of roots) if (!seen.has(s.key)) { out.push({ s, fav: false }); seen.add(s.key); }
   return out;
 }
 
@@ -129,6 +158,17 @@ function init() {
   let timer = 0;
   q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => paint(), 150); });
   $('#studio-tree').onclick = openStudioPicker; // 親子の入れ子の一覧（選ぶと、そのスタジオのホーム）
+  // 並び順: 動画の多い順 / 最新の動画が新しい順（お気に入りは、どちらでも先頭）
+  const paintSort = () => { for (const b of document.querySelectorAll('#studio-sort button')) { const on = b.dataset.sort === loadSort(); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } };
+  paintSort();
+  $('#studio-sort').onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b || b.dataset.sort === loadSort()) return;
+    try { localStorage.setItem(SORT_KEY, b.dataset.sort); } catch { /* 保存できなくても、このあいだは効く */ }
+    paintSort();
+    window.scrollTo(0, 0);
+    paint();
+  };
   new IntersectionObserver((e) => { if (e[0].isIntersecting && isStudiosOpen() && shown < order.length) paint(false); }, { rootMargin: '600px' })
     .observe($('#studio-sentinel'));
   $('#studio-feed').addEventListener('click', (e) => {

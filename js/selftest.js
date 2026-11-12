@@ -256,6 +256,12 @@ export async function runSelftest() {
       // 並べ替えは次に開いたときに反映される（押した行が画面から消えないように）
       tab(''); await wait(300); tab('studios'); await wait(600);
       assert($('#studio-feed .sf').dataset.key === key, 'お気に入りにしたスタジオが、開き直したとき一番上に来ない');
+      // 並び順を「新着順」にしても、お気に入りが先頭で、スタジオが並ぶ
+      localStorage.setItem('studioSortBefore', localStorage.getItem('studioSort') || '');
+      $('#studio-sort [data-sort="new"]').click(); await wait(500);
+      assert($('#studio-feed .sf').dataset.key === key, '新着順でも、お気に入りが先頭に来ない');
+      assert($$('#studio-feed .sf').length >= 2, '新着順でスタジオが並ばない');
+      $('#studio-sort [data-sort="many"]').click(); await wait(300);
       // カードを押すと詳細が開く
       $('#studio-feed .sf .card').click();
       assert(await until(() => isSheetOpen()), 'カードを押しても詳細が開かない');
@@ -267,6 +273,8 @@ export async function runSelftest() {
       assert($('#tabbar [data-tab=""]').classList.contains('on'), 'ホームのタブが選ばれていない');
     } finally {
       if (saved == null) localStorage.removeItem('vfFavStudios'); else localStorage.setItem('vfFavStudios', saved);
+      const sb = localStorage.getItem('studioSortBefore'); localStorage.removeItem('studioSortBefore');
+      if (sb) localStorage.setItem('studioSort', sb); else localStorage.removeItem('studioSort');
       filters.studio = ''; saveFilters(); renderChips(); render();
     }
   });

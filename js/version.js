@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.13.3';
+export const VERSION = '1.14.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.14.0',
+    date: '2026-11-13',
+    items: [
+      'スタジオのタブに、並び順の切り替え（動画の多い順｜新着順）を追加した。新着順は、最新の動画が新しいスタジオから並ぶ（お気に入りは、どちらでも先頭）',
+    ],
+  },
   {
     version: '1.13.3',
     date: '2026-11-12',
