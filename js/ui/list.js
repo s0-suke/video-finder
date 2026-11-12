@@ -315,8 +315,11 @@ export function initList() {
     pressTimer = setTimeout(async () => {
       pressed = true;
       const v = filtered[+c.dataset.i];
-      const added = await toggleFav(v);
-      toast(added ? '♥ お気に入りに追加しました' : 'お気に入りから外しました');
+      if (!v) return; // 長押しのあいだに一覧が描き直された
+      try {
+        const added = await toggleFav(v);
+        toast(added ? '♥ お気に入りに追加しました' : 'お気に入りから外しました');
+      } catch { /* 保存できなかったときの案内は toggleFav 側が出す */ }
     }, 550);
   }, { passive: true });
   const cancel = () => { clearTimeout(pressTimer); pressTimer = null; };

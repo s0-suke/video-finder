@@ -31,7 +31,8 @@ const LEGACY_DEFAULTS = ['https://gayvidsclub.com/', 'https://poapan.xyz/', 'htt
 
 export async function initCrawler() {
   for (const t of await db.getAll('terms')) termCache.set(t.key, t.name);
-  await seedDefaultSites();
+  // 既定サイトの登録に失敗しても、起動は続ける（次の起動でもう一度試す）
+  try { await seedDefaultSites(); } catch (e) { console.warn('既定のサイトを登録できませんでした', e); }
 }
 
 // 既定のサイトを登録する。「登録したことのある既定のサイト」を覚えておき、まだのものだけを足す。

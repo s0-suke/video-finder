@@ -9,7 +9,7 @@
 // 前後の動画への移動（‹ 前へ / 次へ ›、関連動画からは ‹ 戻る）は片手で届くよう下端に固定したバーに置く。
 // シートの高さは一定にして、動画を切り替えてもボタンの位置が動かないようにする。
 
-import { esc, fmtDate } from '../util.js';
+import { esc, fmtDate, bindThumbFallback } from '../util.js';
 import { state, on } from '../data.js';
 import { loadContent } from '../source.js';
 import { mountPlayer } from '../player.js';
@@ -183,6 +183,7 @@ export function openDetail(video, opts = {}) {
     sx = null;
   });
 
+  bindThumbFallback(el); // 関連動画のサムネイルが読めないとき
   const sheetEl = openSheet(el, { tall: true });
   shown = { video, el };
   // ミニプレイヤーから大きく戻したとき、前後移動・戻る先をこの動画のものに戻す

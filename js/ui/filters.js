@@ -72,13 +72,19 @@ export function openFilters() {
 // 探していないときは親だけを並べ、「▸」で子を開く。探しているときは、当てはまる行を親の名前つきで並べる
 const expanded = new Set(); // 開いている親の key（シートを開き直しても覚えておく）
 
-export function openStudioPicker() {
+/** onPick(key) を渡すと、選んだあとの動きを差し替える（スタジオのタブから開くとき、そのスタジオのホームへ移るため）。省略したら、いまの一覧を絞る */
+export function openStudioPicker(onPick) {
   const el = openSheet(`
     <h2 style="margin-top:0">スタジオ</h2>
-    <input class="picker-q" type="search" placeholder="スタジオ名で探す" autocomplete="off">
+    <input class="picker-q" type="search" placeholder="スタジオ名で探す" aria-label="スタジオ名で探す" autocomplete="off">
     <div class="picker-list"></div>
   `);
-  mountStudioPicker(el, (key) => {
+  // シートを閉じる「戻る」（履歴）が済んでから移る（先に移ると、あとから届く「戻る」で、元のページに引き戻される）
+  const afterClose = (fn) => {
+    if (history.state && history.state.sheet) { addEventListener('popstate', fn, { once: true }); closeSheet(); }
+    else { closeSheet(); fn(); }
+  };
+  mountStudioPicker(el, onPick ? (key) => afterClose(() => onPick(key)) : (key) => {
     filters.studio = key;
     saveFilters(); renderChips(); closeSheet(); render();
   });

@@ -24,7 +24,7 @@ export async function renderSettings() {
           <div class="host">${esc(s.name)}</div>
           <div class="status ${s.error ? 'err' : ''}">${esc(s.status || '未収集')} · ${(s.count || 0).toLocaleString()} 件${s.lastRun ? ' · ' + new Date(s.lastRun).toLocaleString('ja-JP') : ''}</div>
         </div>
-        <button class="toggle ${s.enabled ? 'on' : ''}" data-toggle="${s.id}" aria-label="有効/無効"></button>
+        <button class="toggle ${s.enabled ? 'on' : ''}" data-toggle="${s.id}" aria-label="${esc(s.name)} を${s.enabled ? '無効にする' : '有効にする'}" aria-pressed="${s.enabled ? 'true' : 'false'}"></button>
       </div>
       <div class="btn-row">
         <button class="btn" data-collect="${s.id}" ${crawl.running ? 'disabled' : ''}>収集</button>
@@ -69,6 +69,7 @@ export function initSettings() {
     const t = e.target.closest('[data-toggle]');
     if (t) {
       const s = state.sites.find((x) => x.id === +t.dataset.toggle);
+      if (!s) return renderSettings(); // 描いたあとにサイトが消えていた
       s.enabled = !s.enabled;
       await saveSite(s);
       rebuild();

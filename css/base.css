@@ -363,3 +363,7 @@ details.more[open] summary { margin-bottom: 4px; }
 .sf-more span { font-size: 14px; font-weight: 600; }
 .sf-more b { font-size: 12px; font-weight: 400; color: var(--muted); }
 #studio-sort { margin-top: 12px; }
+
+/* タップ領域を 44pt に広げる（Apple の HIG）。見た目は変えない */
+.toggle::before { content: ''; position: absolute; inset: -8px -4px; }
+.picker-toggle { width: 44px; }

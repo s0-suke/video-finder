@@ -20,7 +20,7 @@
 {
   "imports": {
     "./js/actor.js": "./js/actor.js?v=48d85c9b",
-    "./js/crawler.js": "./js/crawler.js?v=c179140f",
+    "./js/crawler.js": "./js/crawler.js?v=c826e577",
     "./js/data.js": "./js/data.js?v=3ade55ac",
     "./js/db.js": "./js/db.js?v=b76d3ed9",
     "./js/details.js": "./js/details.js?v=bf80e43e",
@@ -35,25 +35,25 @@
     "./js/player.js": "./js/player.js?v=61934753",
     "./js/release-estimate.js": "./js/release-estimate.js?v=d6268eae",
     "./js/release.js": "./js/release.js?v=133cbb83",
-    "./js/selftest.js": "./js/selftest.js?v=2a8df08c",
+    "./js/selftest.js": "./js/selftest.js?v=16a8958d",
     "./js/source.js": "./js/source.js?v=eafd319d",
     "./js/studios.js": "./js/studios.js?v=475b136a",
     "./js/ui/continue.js": "./js/ui/continue.js?v=901d6ee1",
-    "./js/ui/detail.js": "./js/ui/detail.js?v=89a15cad",
-    "./js/ui/filters.js": "./js/ui/filters.js?v=f553f18e",
-    "./js/ui/list.js": "./js/ui/list.js?v=31fca058",
-    "./js/ui/settings.js": "./js/ui/settings.js?v=922e29ff",
+    "./js/ui/detail.js": "./js/ui/detail.js?v=76b69388",
+    "./js/ui/filters.js": "./js/ui/filters.js?v=8c8f8d83",
+    "./js/ui/list.js": "./js/ui/list.js?v=6a287731",
+    "./js/ui/settings.js": "./js/ui/settings.js?v=40e11a44",
     "./js/ui/sheet.js": "./js/ui/sheet.js?v=10684a5d",
-    "./js/ui/studios.js": "./js/ui/studios.js?v=6b7cab78",
+    "./js/ui/studios.js": "./js/ui/studios.js?v=2348da27",
     "./js/ui/tabbar.js": "./js/ui/tabbar.js?v=0b905d47",
-    "./js/util.js": "./js/util.js?v=9b0603bd",
-    "./js/version.js": "./js/version.js?v=91c00378",
+    "./js/util.js": "./js/util.js?v=8ac3d4cc",
+    "./js/version.js": "./js/version.js?v=c9307a78",
     "./js/wp.js": "./js/wp.js?v=3228695d"
   }
 }
 </script>
 <!-- /stamp:importmap -->
-<link rel="stylesheet" href="css/base.css?v=307080df">
+<link rel="stylesheet" href="css/base.css?v=ae07213d">
 <link rel="stylesheet" href="css/player.css?v=ac2ae8e5">
 <link rel="stylesheet" href="css/favorites.css?v=eee902fb">
 <link rel="stylesheet" href="css/details.css?v=7e3271e3">
@@ -65,7 +65,7 @@
   <header class="top">
     <div class="bar top-search" id="top-search">
       <div class="search">
-        <input id="q" type="search" placeholder="タイトル・品番・タグで検索" enterkeyhint="search" autocomplete="off">
+        <input id="q" type="search" placeholder="タイトル・品番・タグで検索" aria-label="検索" enterkeyhint="search" autocomplete="off">
         <button class="clear" id="q-clear" aria-label="クリア">×</button>
         <div class="suggest hidden" id="suggest"></div>
       </div>
@@ -93,7 +93,7 @@
   <header class="top">
     <div class="bar top-search">
       <div class="search">
-        <input id="studio-q" type="search" placeholder="スタジオ名で探す" autocomplete="off">
+        <input id="studio-q" type="search" placeholder="スタジオ名で探す" aria-label="スタジオ名で探す" autocomplete="off">
       </div>
       <button class="icon-btn" id="studio-tree" aria-label="スタジオの階層一覧">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M4 12h16M4 18h10"/></svg>

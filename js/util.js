@@ -27,3 +27,21 @@ export function toast(message) {
   // 長い文は読み終えられるよう長めに出す
   toastTimer = setTimeout(() => el.classList.remove('on'), Math.max(2200, message.length * 90));
 }
+
+/**
+ * サムネイル（.thumb の中の img）の読み込みに失敗したら、代わりの表示（.ph。カードのタイトルの先頭）に切り替える。
+ * error は伝わらないので、キャプチャで拾う。root に 1 回だけ付ける
+ */
+export function bindThumbFallback(root) {
+  root.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    const thumb = img.closest('.thumb');
+    if (!thumb) return;
+    const label = (img.closest('.card, .rel')?.querySelector('.title')?.textContent || '').slice(0, 12);
+    const ph = document.createElement('div');
+    ph.className = 'ph';
+    ph.textContent = label;
+    img.replaceWith(ph);
+  }, true);
+}

@@ -279,6 +279,19 @@ export async function runSelftest() {
     }
   });
 
+  await check('スタジオのタブの階層ボタン: シートで選ぶと、そのスタジオのホームになる', async () => {
+    const target = state.studios.find((s) => !s.parent && s.total > 0);
+    if (!target) return 'スタジオがない（省略）';
+    tab('studios'); await wait(500);
+    $('#studio-tree').click(); await wait(500);
+    const row = $(`.picker-row[data-key="${target.key}"]`);
+    assert(row, 'シートにスタジオの行がない');
+    row.click(); await wait(600);
+    assert($('#view-studios').classList.contains('hidden') && !$('#view-list').classList.contains('hidden'), 'ホームの一覧に移らない');
+    assert(filters.studio === target.key, 'スタジオで絞り込まれていない');
+    filters.studio = ''; saveFilters(); renderChips(); render();
+  });
+
   await check('ホームに最近見た動画が出て、タップで詳細が開く', async () => {
     const keys = recentKeys().filter((k) => state.byKey.has(k));
     if (!keys.length) return '視聴履歴がない（省略）';

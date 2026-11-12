@@ -7,7 +7,7 @@
 // - お気に入りは localStorage の vfFavStudios（{ スタジオの key: 名前 }）。アプリ（iOS）がホームのチップに出すのと同じもの。
 //   変えたら window に vfFavsChanged を送る（アプリ側のスクリプトが受けて、ホームのチップの並びを合わせる）
 
-import { $, esc, toast } from '../util.js';
+import { $, esc, toast, bindThumbFallback } from '../util.js';
 import { state, on, isNew } from '../data.js';
 import { descendantKeys } from '../studios.js';
 import { feature } from '../features.js';
@@ -120,11 +120,19 @@ function paint(reset = true) {
   const next = order.slice(shown, shown + (shown ? MORE : FIRST));
   feed.insertAdjacentHTML('beforeend', next.map(sectionHTML).join(''));
   shown += next.length;
-  $('#studio-empty').classList.toggle('hidden', order.length > 0);
+  const empty = $('#studio-empty');
+  empty.textContent = state.posts.size ? '見つかりません' : 'まだデータがありません。設定から収集してください';
+  empty.classList.toggle('hidden', order.length > 0);
 }
 
 /** 作り直す。いまのスクロール位置と、ここまでに作った数を保つ（収集が進むたびに呼ばれても、位置が飛ばないように） */
+const signature = (list) => list.map((r) => `${r.s.key}:${r.s.total}`).join(',');
+
 function repaint() {
+  // 先頭付近を見ているときだけ描き直す（読み進めている途中で、カルーセルの位置・画像・押した行が入れ替わらないように。次に開いたときに新しくなる）
+  if (window.scrollY >= 300) return;
+  const next = buildOrder();
+  if (signature(next.slice(0, Math.max(shown, FIRST))) === signature(order.slice(0, Math.max(shown, FIRST)))) return;
   const y = window.scrollY;
   const keep = Math.max(shown, FIRST);
   paint();
@@ -145,6 +153,13 @@ function markStar(key, on) {
 function goHomeWith(key) {
   filters.studio = key;
   filters.view = '';
+  // ホームに残っている検索語・出演者の絞り込みで、0 件や少なく見えないよう外す
+  filters.q = '';
+  filters.actor = '';
+  const q = $('#q');
+  if (q) q.value = '';
+  const clear = $('#q-clear');
+  if (clear) clear.style.display = 'none';
   saveFilters();
   renderChips();
   history.replaceState(history.state, '', location.pathname + location.search);
@@ -157,7 +172,8 @@ function init() {
   const q = $('#studio-q');
   let timer = 0;
   q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => paint(), 150); });
-  $('#studio-tree').onclick = openStudioPicker; // 親子の入れ子の一覧（選ぶと、そのスタジオのホーム）
+  $('#studio-tree').onclick = () => openStudioPicker(goHomeWith); // 親子の入れ子の一覧（選ぶと、そのスタジオのホーム）
+  bindThumbFallback($('#studio-feed'));
   // 並び順: 動画の多い順 / 最新の動画が新しい順（お気に入りは、どちらでも先頭）
   const paintSort = () => { for (const b of document.querySelectorAll('#studio-sort button')) { const on = b.dataset.sort === loadSort(); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } };
   paintSort();
