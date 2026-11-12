@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.14.1';
+export const VERSION = '1.15.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.15.0',
+    date: '2026-11-13',
+    items: [
+      'ホームの「すべて」の隣に「新着」のチップを追加した（新着の数つき。もう一度押すと戻る）。アプリ版では、タブバーを App Store のように 5 つ（ホーム・スタジオ・お気に入り・設定・検索）に収めるため、新着はここから開く',
+    ],
+  },
   {
     version: '1.14.1',
     date: '2026-11-13',

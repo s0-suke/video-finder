@@ -124,6 +124,9 @@ export function render(reset = true) {
     : 'まだデータがありません。設定から収集してください';
 }
 
+// 新着の数（チップの数字）
+const newCount = () => state.videos.reduce((c, v) => c + (isNew(v) ? 1 : 0), 0);
+
 export function renderChips() {
   // チップに並べるのは親のないスタジオ（子は親の下。親は子を含めた本数 total の順）
   const roots = state.studios.filter((s) => !s.parent);
@@ -135,7 +138,9 @@ export function renderChips() {
   }
   const chip = (on, attrs, label) => `<button class="chip ${on ? 'on' : ''}" ${attrs}>${label}</button>`;
   $('#chips').innerHTML =
-    chip(!filters.studio, 'data-chip="all"', 'すべて') +
+    chip(!filters.studio && filters.view !== 'new', 'data-chip="all"', 'すべて') +
+    // 新着は、タブバーのタブではなく、ここのチップ（「すべて」の隣）から開く（タブバーを App Store のように 5 つに収めるため）
+    (feature('newBadge') ? chip(filters.view === 'new', 'data-chip="new"', `新着${newCount() ? ` <span class="count">${newCount() > 99 ? '99+' : newCount()}</span>` : ''}`) : '') +
     top.map((s) => chip(filters.studio === s.key, `data-chip="studio" data-key="${esc(s.key)}"`, esc(s.name))).join('') +
     (state.studios.length > CHIP_STUDIOS ? '<button class="chip more" data-chip="more">スタジオ一覧…</button>' : '');
   // 選んでいるチップが横スクロールの外にあれば見える位置まで送る
@@ -297,7 +302,8 @@ export function initList() {
     if (!b) return;
     const kind = b.dataset.chip;
     if (kind === 'more') return openStudioPicker();
-    if (kind === 'all') filters.studio = '';
+    if (kind === 'all') { filters.studio = ''; if (filters.view === 'new') filters.view = ''; }
+    if (kind === 'new') { filters.view = filters.view === 'new' ? '' : 'new'; saveFilters(); renderChips(); render(); dispatchEvent(new Event('viewchange')); return; }
     if (kind === 'studio') filters.studio = filters.studio === b.dataset.key ? '' : b.dataset.key;
     saveFilters();
     renderChips();
