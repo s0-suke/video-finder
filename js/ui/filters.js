@@ -92,10 +92,12 @@ export function openStudioPicker(onPick) {
 
 /**
  * スタジオ一覧を el の中に作る（el に .picker-q と .picker-list が入っていること）。
- * シート（openStudioPicker）とスタジオのページ（ui/studios.js）で共有する。選ばれたら onPick(key。「すべて」は ''）
+ * シート（openStudioPicker）と検索タブ（ui/search.js）で共有する。選ばれたら onPick(key。「すべて」は ''）
+ * opts.search を渡すと、検索語はそれ（関数）から読む（検索タブは、ページの上の検索欄を使う。.picker-q は要らない）
  */
-export function mountStudioPicker(el, onPick) {
+export function mountStudioPicker(el, onPick, opts = {}) {
   const q = el.querySelector('.picker-q');
+  const queryText = () => (opts.search ? opts.search() : q.value);
   const list = el.querySelector('.picker-list');
   const row = (s, { depth = 0, via = '' } = {}) => {
     const kids = s.children.length;
@@ -109,7 +111,7 @@ export function mountStudioPicker(el, onPick) {
       `<button class="picker-row ${filters.studio === s.key ? 'on' : ''}" data-key="${esc(s.key)}"><span>${prefix}${esc(s.name)}${sub}</span><span class="picker-n">${s.total.toLocaleString()}</span></button></div>`;
   };
   const paint = () => {
-    const w = q.value.trim().normalize('NFKC').toLowerCase();
+    const w = queryText().trim().normalize('NFKC').toLowerCase();
     const byKey = new Map(state.studios.map((s) => [s.key, s]));
     let html = filters.studio ? '<button class="picker-row" data-key="">すべてのスタジオ</button>' : '';
     if (w) {
@@ -128,11 +130,11 @@ export function mountStudioPicker(el, onPick) {
     list.innerHTML = html;
   };
   paint();
-  q.addEventListener('input', paint);
+  if (q) q.addEventListener('input', paint);
   // マウス・キーボードの端末では、開いたらすぐ入力できるようにする。
   // タッチ端末では、キーボードが一覧の半分を覆って、親子の一覧が見づらくなるので、検索欄をタップしたときに出す
   const touch = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
-  if (!touch) q.focus({ preventScroll: true });
+  if (q && !touch) q.focus({ preventScroll: true });
   list.onclick = (e) => {
     const t = e.target.closest('[data-toggle]');
     if (t) {

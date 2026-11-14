@@ -6,6 +6,7 @@
 
 import { $, $$ } from './util.js';
 import { state, DEFAULT_SITES } from './data.js';
+import { allActors, getActor, isFavActor, toggleFavActor } from './actors.js';
 import * as db from './db.js';
 import { filters, saveFilters, render, renderChips, setActor } from './ui/list.js';
 import { recentKeys } from './history.js';
@@ -18,7 +19,9 @@ async function until(fn, ms = 6000) {
   return false;
 }
 const tab = (t) => $(`#tabbar [data-tab="${t}"]`).click();
-const lib = (v) => $(`#lib-seg [data-view="${v}"]`).click(); // お気に入り｜履歴 の切り替え
+const lib = (v) => $(`#lib-seg [data-lib="${v}"]`).click(); // お気に入り（動画｜出演者｜履歴）の切り替え
+const goto = async (hash) => { history.replaceState(history.state, '', location.pathname + location.search + hash); dispatchEvent(new HashChangeEvent('hashchange')); dispatchEvent(new Event('viewchange')); await wait(500); };
+const listPage = () => goto(''); // 一覧（検索・スタジオ・出演者の結果。お気に入り・履歴）のページ
 const back = async () => { history.back(); await wait(400); };
 const typeQuery = async (q) => {
   const input = $('#q');
@@ -43,7 +46,13 @@ export async function runSelftest() {
   };
   const assert = (cond, msg) => { if (!cond) throw new Error(msg); };
 
-  await until(() => state.videos.length > 0 && $$('#grid .card:not(.skel)').length > 0, 20000);
+  await until(() => state.videos.length > 0, 20000);
+  // 以降の多くのテストは、一覧のページ（すべての動画。前回の保存状態の「履歴」などではなく）で走らせる
+  Object.assign(filters, { view: '', q: '', studio: '', actor: '', site: '' });
+  saveFilters(); renderChips();
+  await listPage();
+  render();
+  await until(() => $$('#grid .card:not(.skel)').length > 0, 10000);
 
   await check('起動して一覧が出る', () => {
     const n = $$('#grid .card:not(.skel)').length;
@@ -71,6 +80,7 @@ export async function runSelftest() {
   });
 
   await check('スタジオのチップで絞り込み、すべてで戻る', async () => {
+    filters.view = ''; saveFilters(); renderChips(); render();
     const chip = $('#chips [data-chip="studio"]');
     assert(chip, 'スタジオのチップがない');
     chip.click();
@@ -81,18 +91,27 @@ export async function runSelftest() {
     assert(!filters.studio, 'すべてで戻らない');
   });
 
-  await check('タブの切り替え（お気に入り・履歴・設定・ホーム）', async () => {
-    tab('fav'); await wait(300);
-    assert(filters.view === 'fav', 'お気に入りタブ');
-    assert(!$('#lib-seg').classList.contains('hidden'), 'お気に入りの切り替え（お気に入り｜履歴）が出ない');
-    lib('history'); await wait(300);
-    assert(filters.view === 'history', '履歴の切り替え');
-    assert($('#tabbar [data-tab="fav"]').classList.contains('on'), '履歴のときも、お気に入りのタブが選ばれたまま');
+  await check('タブの切り替え（ホーム・お気に入り（動画｜出演者｜履歴）・検索・設定の 4 つ）', async () => {
+    assert($$('#tabbar button').length === 4, 'タブが 4 つではない');
+    tab('home'); await wait(500);
+    assert(location.hash === '#home' && !$('#view-home').classList.contains('hidden'), 'ホームが出ない');
+    assert($('#tabbar [data-tab="home"]').classList.contains('on'), 'ホームのタブが選ばれない');
+    tab('fav'); await wait(400);
+    assert(filters.view === 'fav' || filters.view === 'history' || location.hash === '#favactors', 'お気に入りタブ');
+    lib('fav'); await wait(400);
+    assert(filters.view === 'fav' && !$('#lib-seg').classList.contains('hidden'), 'お気に入り（動画）の切り替えが出ない');
+    lib('history'); await wait(400);
+    assert(filters.view === 'history' && $('#tabbar [data-tab="fav"]').classList.contains('on'), '履歴のときも、お気に入りのタブが選ばれたまま');
+    lib('actors'); await wait(500);
+    assert(location.hash === '#favactors' && !$('#view-favactors').classList.contains('hidden'), 'お気に入りの出演者のページが出ない');
+    assert($('#tabbar [data-tab="fav"]').classList.contains('on'), 'お気に入りの出演者でも、お気に入りのタブが選ばれたまま');
+    tab('search'); await wait(500);
+    assert(location.hash === '#search' && !$('#view-search').classList.contains('hidden'), '検索が出ない');
     tab('settings'); await wait(500);
     assert(!$('#view-settings').classList.contains('hidden'), '設定が出ない');
     assert($$('#settings-extra .section-title').length >= 3, '設定の項目が足りない');
-    tab(''); await wait(500);
-    assert(!$('#view-list').classList.contains('hidden') && filters.view === '', 'ホームに戻らない');
+    await listPage();
+    assert(!$('#view-list').classList.contains('hidden'), '一覧に戻らない');
   });
 
   await check('詳細を開き、再生ボタン・お気に入り・前後移動が動く', async () => {
@@ -228,84 +247,127 @@ export async function runSelftest() {
     assert($$('#grid .card').length === vs.length, `件数が合わない（${$$('#grid .card').length}）`);
     const cond = $('#meta .cond[data-clear="actor"]');
     assert(cond && cond.textContent.includes('テスト出演者'), '出演の条件チップがない');
-    assert($('#tabbar [data-tab=""]').classList.contains('on'), 'ホームのタブが選ばれていない');
+    assert($('#tabbar [data-tab="search"]').classList.contains('on'), '検索のタブが選ばれていない（結果の一覧は、検索のタブの中）');
     cond.click(); await wait(300);
     assert(!filters.actor && $$('#grid .card').length > vs.length, '外れない');
     assert(!JSON.parse(localStorage.getItem('filters3') || '{}').actor, '出演者の絞り込みが保存されている');
   });
 
-  await check('スタジオのタブ: スタジオごとの最新動画のカルーセル。お気に入りが上に来て、名前を押すとそのスタジオのホームになる', async () => {
-    const parent = state.studios.find((s) => !s.parent && s.children.length && s.total > 0);
-    if (!parent) return '子のあるスタジオがない（省略）';
+  await check('ホーム: 4 つの切り替え（おすすめ・新着・スタジオ・出演者）が、タップで行き来でき、スタジオはカルーセル・お気に入りが上に来る', async () => {
+    const parent = state.studios.find((s) => !s.parent && s.total > 0);
     const saved = localStorage.getItem('vfFavStudios');
     try {
       localStorage.removeItem('vfFavStudios');
-      tab('studios'); await wait(600);
-      assert(!$('#view-studios').classList.contains('hidden') && $('#view-list').classList.contains('hidden'), 'スタジオのページが出ない');
-      assert($('#tabbar [data-tab="studios"]').classList.contains('on'), 'スタジオのタブが選ばれていない');
+      await goto('#home');
+      const panelBtn = (p) => $(`#home-tabs [data-p="${p}"]`);
+      for (const p of ['rec', 'new', 'studios', 'actors']) assert(panelBtn(p), `${p} の切り替えがない`);
+      panelBtn('rec').click(); await wait(500);
+      assert($('#hp-rec .sf, #hp-rec .state'), 'おすすめが出ない');
+      panelBtn('new').click(); await wait(500);
+      assert(!$('#hp-new-wrap').classList.contains('hidden') && $$('#hp-new-grid .card').length > 0, '新着が出ない');
+      panelBtn('studios').click(); await wait(700);
+      assert(!$('#hp-studios-wrap').classList.contains('hidden'), 'スタジオのパネルが出ない');
       const first = $('#studio-feed .sf');
       assert(first, 'スタジオの行がない');
       assert(first.querySelectorAll('.sf-row .card').length > 0, 'カルーセルに動画がない');
-      // お気に入りにすると、一番上に来る
+      if (!parent) return 'スタジオが少ない（以降は省略）';
+      // お気に入りにすると、開き直したとき一番上に来る（押した行は動かない）
       const secs = $$('#studio-feed .sf');
       const target = secs[Math.min(2, secs.length - 1)];
       const key = target.dataset.key;
       target.querySelector('[data-fav]').click(); await wait(400);
       assert(JSON.parse(localStorage.getItem('vfFavStudios') || '{}')[key], 'お気に入りが保存されない');
       assert(target.querySelector('.sf-star.on'), '☆ が ★ にならない');
-      // 並べ替えは次に開いたときに反映される（押した行が画面から消えないように）
-      tab(''); await wait(300); tab('studios'); await wait(600);
+      panelBtn('rec').click(); await wait(400);
+      panelBtn('studios').click(); await wait(600);
       assert($('#studio-feed .sf').dataset.key === key, 'お気に入りにしたスタジオが、開き直したとき一番上に来ない');
-      // 並び順を「新着順」にしても、お気に入りが先頭で、スタジオが並ぶ
-      localStorage.setItem('studioSortBefore', localStorage.getItem('studioSort') || '');
-      $('#studio-sort [data-sort="new"]').click(); await wait(500);
-      assert($('#studio-feed .sf').dataset.key === key, '新着順でも、お気に入りが先頭に来ない');
-      assert($$('#studio-feed .sf').length >= 2, '新着順でスタジオが並ばない');
-      $('#studio-sort [data-sort="many"]').click(); await wait(300);
-      // カードを押すと詳細が開く
-      $('#studio-feed .sf .card').click();
-      assert(await until(() => isSheetOpen()), 'カードを押しても詳細が開かない');
-      await back();
-      // 名前を押すと、そのスタジオのホームになる
-      $('#studio-feed .sf [data-open]').click(); await wait(500);
-      assert($('#view-studios').classList.contains('hidden') && !$('#view-list').classList.contains('hidden'), 'ホームの一覧に戻らない');
+      // おすすめにも、お気に入りのスタジオの行が出る
+      panelBtn('rec').click(); await wait(500);
+      assert($('#hp-rec').textContent.includes('の新作'), 'おすすめに、お気に入りのスタジオの新作が出ない');
+      // 名前を押すと、そのスタジオの動画の一覧になる
+      panelBtn('studios').click(); await wait(600);
+      $('#studio-feed .sf [data-open]').click(); await wait(600);
+      assert($('#view-home').classList.contains('hidden') && !$('#view-list').classList.contains('hidden'), '一覧に移らない');
       assert(filters.studio === key && filters.view === '', 'スタジオで絞り込まれていない');
-      assert($('#tabbar [data-tab=""]').classList.contains('on'), 'ホームのタブが選ばれていない');
+      assert($('#list-nav') && !$('#list-nav').classList.contains('hidden'), '一覧の「戻る」が出ない');
+      $('#list-back').click(); await wait(500);
+      assert(location.hash === '#home', '戻るでホームに戻らない');
     } finally {
       if (saved == null) localStorage.removeItem('vfFavStudios'); else localStorage.setItem('vfFavStudios', saved);
-      const sb = localStorage.getItem('studioSortBefore'); localStorage.removeItem('studioSortBefore');
-      if (sb) localStorage.setItem('studioSort', sb); else localStorage.removeItem('studioSort');
-      filters.studio = ''; saveFilters(); renderChips(); render();
+      filters.studio = ''; saveFilters(); renderChips();
     }
   });
 
-  await check('スタジオのタブの階層ボタン: シートで選ぶと、そのスタジオのホームになる', async () => {
-    const target = state.studios.find((s) => !s.parent && s.total > 0);
-    if (!target) return 'スタジオがない（省略）';
-    tab('studios'); await wait(500);
-    $('#studio-tree').click(); await wait(500);
-    const row = $(`.picker-row[data-key="${target.key}"]`);
-    assert(row, 'シートにスタジオの行がない');
-    row.click(); await wait(600);
-    assert($('#view-studios').classList.contains('hidden') && !$('#view-list').classList.contains('hidden'), 'ホームの一覧に移らない');
-    assert(filters.studio === target.key, 'スタジオで絞り込まれていない');
-    filters.studio = ''; saveFilters(); renderChips(); render();
+  await check('ホーム: 左右のスワイプで切り替えが行き来できる', async () => {
+    await goto('#home');
+    $('#home-tabs [data-p="rec"]').click(); await wait(400);
+    const root = $('#view-home');
+    const touch = (type, x, y) => {
+      const t = new Touch({ identifier: 1, target: root, clientX: x, clientY: y });
+      root.dispatchEvent(new TouchEvent(type, { touches: type === 'touchend' ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true }));
+    };
+    touch('touchstart', 300, 400); touch('touchend', 120, 405); await wait(500);
+    assert(!$('#hp-new-wrap').classList.contains('hidden'), '左へスワイプしても、次の「新着」にならない');
+    touch('touchstart', 100, 400); touch('touchend', 280, 402); await wait(500);
+    assert(!$('#hp-rec-wrap').classList.contains('hidden'), '右へスワイプしても、前の「おすすめ」に戻らない');
   });
 
-  await check('ホームに最近見た動画が出て、タップで詳細が開く', async () => {
-    const keys = recentKeys().filter((k) => state.byKey.has(k));
-    if (!keys.length) return '視聴履歴がない（省略）';
-    tab(''); await wait(300);
-    const row = $('#continue');
-    assert(row && !row.classList.contains('hidden'), '行が出ない');
-    assert(row.querySelectorAll('[data-i]').length === Math.min(keys.length, 12), '件数が合わない');
-    row.querySelector('[data-i="0"]').click();
-    assert(await until(() => isSheetOpen()), 'シートが開かない');
-    assert($('#sheet').dataset.key === keys[0], '違う動画が開いた');
-    await back();
-    tab('fav'); await wait(300);
-    assert(row.classList.contains('hidden'), 'お気に入りタブでも出ている');
-    tab(''); await wait(300);
+  await check('検索タブ: 出演者の一覧から出演者のページを開き、♥ でお気に入りにできる', async () => {
+    await goto('#search');
+    $('#search-seg [data-seg="actors"]').click();
+    assert(await until(() => allActors().length > 0 && $$('#search-pane-actors .actor-row').length > 0, 30000), '出演者の一覧が出ない');
+    // 名前で絞る
+    const first = getActor(+$('#search-pane-actors .actor-row').dataset.actor);
+    const q = $('#search-q');
+    q.value = first.display.slice(0, 2); q.dispatchEvent(new Event('input')); await wait(500);
+    assert($$('#search-pane-actors .actor-row').length >= 1, '名前で絞れない');
+    q.value = ''; q.dispatchEvent(new Event('input')); await wait(400);
+    // ページを開く
+    const saved = localStorage.getItem('vfFavActors');
+    try {
+      localStorage.removeItem('vfFavActors');
+      const row = $('#search-pane-actors .actor-row');
+      const id = +row.dataset.actor;
+      row.click(); await wait(600);
+      assert(location.hash === `#actor/${id}` && !$('#view-actor').classList.contains('hidden'), '出演者のページが開かない');
+      assert($('#view-actor-body .ap-title h1').textContent === getActor(id).display, '名前が合わない');
+      assert($('#tabbar [data-tab="search"]').classList.contains('on'), '検索のタブが選ばれたままでない');
+      const heart = $('#view-actor-body [data-fav-actor]');
+      heart.click(); await wait(300);
+      assert(isFavActor(id), '♥ で、お気に入りにならない');
+      assert(JSON.parse(localStorage.getItem('vfFavActors') || '{}')[id], '♥ が保存されない');
+      $('#actor-back').click(); await wait(500);
+      assert(location.hash === '#search', '戻るで検索に戻らない');
+      assert($('#search-pane-actors .actor-row .heart-btn.on'), '一覧の ♥ に反映されない');
+      tab('fav'); await wait(400);
+      lib('actors'); await wait(700);
+      assert($$('#favactors-list .actor-row').length === 1, 'お気に入りの出演者に出ない');
+      toggleFavActor(id); await wait(200);
+    } finally {
+      if (saved == null) localStorage.removeItem('vfFavActors'); else localStorage.setItem('vfFavActors', saved);
+    }
+  });
+
+  await check('検索タブ: スタジオ（階層の一覧）で選ぶと、そのスタジオの動画の一覧になる。動画（キーワード）は結果が出る', async () => {
+    const target = state.studios.find((s) => !s.parent && s.total > 0);
+    await goto('#search');
+    // 動画（キーワード）
+    $('#search-seg [data-seg="videos"]').click(); await wait(300);
+    const v = state.videos.find((x) => x.code);
+    const q = $('#search-q');
+    q.value = v.code.replace(/-/g, '').toLowerCase(); q.dispatchEvent(new Event('input')); await wait(500);
+    assert($$('#search-videos-grid .card').length >= 1, 'キーワードで動画が当たらない');
+    q.value = ''; q.dispatchEvent(new Event('input')); await wait(300);
+    if (!target) return 'スタジオがない（スタジオの確認は省略）';
+    $('#search-seg [data-seg="studios"]').click(); await wait(500);
+    const row = $(`#search-pane-studios .picker-row[data-key="${target.key}"]`);
+    assert(row, 'スタジオの行がない');
+    row.click(); await wait(600);
+    assert(!$('#view-list').classList.contains('hidden') && filters.studio === target.key, 'そのスタジオの一覧にならない');
+    assert($('#tabbar [data-tab="search"]').classList.contains('on'), '結果の一覧でも、検索のタブが選ばれたまま');
+    $('#list-back').click(); await wait(500);
+    assert(location.hash === '#search', '一覧から戻れない');
+    filters.studio = ''; saveFilters(); renderChips();
   });
 
   await check('既定のサイトを登録済みとして覚えている（あとから既定に足したサイトを、一度だけ登録するため）', async () => {

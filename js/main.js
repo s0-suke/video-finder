@@ -8,6 +8,7 @@ import * as player from './player.js';
 import * as favorites from './favorites.js';
 import * as details from './details.js';
 import * as history from './history.js';
+import { initActors } from './actors.js';
 import { initRelease, loadRelease, collectRelease } from './release.js';
 import * as features from './features.js';
 import { feature } from './features.js';
@@ -17,21 +18,33 @@ import { initList, render, renderChips, saveFilters, dropStaleFilters } from './
 import { openFilters } from './ui/filters.js';
 import { initSettings, openSettings } from './ui/settings.js';
 import { initTabbar } from './ui/tabbar.js';
-import { openStudios } from './ui/studios.js';
-import { initContinue } from './ui/continue.js';
+import { openHome } from './ui/home.js';
+import { openSearch } from './ui/search.js';
+import { renderActorPage, initActorPage, actorIdFromHash, renderFavActors } from './ui/actors.js';
+import { pageOf, rememberBack, goBack, switchHash } from './ui/tabbar.js';
+import { setQuery } from './ui/list.js';
+
+// 開いているページだけを表示する。ページは URL のハッシュで決まる（ui/tabbar.js の pageOf）
+const PAGES = { list: '#view-list', home: '#view-home', search: '#view-search', actor: '#view-actor', favactors: '#view-favactors', settings: '#view-settings' };
+let lastPage = '';
 
 function route() {
-  const settings = location.hash === '#settings';
-  const studios = location.hash === '#studios';
-  $('#view-list').classList.toggle('hidden', settings || studios);
-  $('#view-settings').classList.toggle('hidden', !settings);
-  $('#view-studios').classList.toggle('hidden', !studios);
+  const page = pageOf();
+  for (const [p, sel] of Object.entries(PAGES)) $(sel).classList.toggle('hidden', p !== page);
   hideSheet();
+  // 一覧・出演者のページから戻る先を覚える（ホーム・検索・お気に入りの出演者）
+  if (lastPage && lastPage !== page) rememberBack(lastHash);
+  lastPage = page;
+  lastHash = location.hash;
   window.scrollTo(0, 0);
-  if (settings) openSettings();
-  else if (studios) openStudios();
+  if (page === 'settings') openSettings();
+  else if (page === 'home') openHome();
+  else if (page === 'search') openSearch();
+  else if (page === 'actor') renderActorPage(actorIdFromHash());
+  else if (page === 'favactors') renderFavActors();
   else render();
 }
+let lastHash = '';
 
 // iPhone の Safari で開いているときだけ、ホーム画面への追加を案内する（閉じたら出さない）
 function installTip() {
@@ -56,14 +69,18 @@ async function boot() {
   rebuild();
   await initCrawler();
   features.init();
-  await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease()]);
+  await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease(), initActors()]);
 
   version.init();
   initSheet();
   initList();
   initSettings();
   initTabbar();
-  initContinue();
+  initActorPage({
+    onBack: goBack,
+    // 出演者の名前で動画を探す（otokoki の別名のどれかで、手元の動画の全文検索に当てる）
+    onSearchWords: (a) => { switchHash(''); setQuery(a.aliases.find((x) => x.length >= 2) || a.display); },
+  });
   $('#filter-btn').onclick = openFilters;
   on('progress', () => {
     $('#progress').classList.toggle('on', crawl.running);
@@ -81,11 +98,13 @@ async function boot() {
     if (!feature('installTip')) $('#install-tip').classList.add('hidden');
     if (!feature('backfillBanner')) $('#banner').classList.add('hidden');
     renderChips();
-    if (!location.hash) render();
+    if (pageOf() === 'list') render();
   });
   dropStaleFilters();
   saveFilters();
   renderChips();
+  // はじめに開くのはホーム（ハッシュがなければ、ホームにする）
+  if (!location.hash) window.history.replaceState(window.history.state, '', `${location.pathname}${location.search}#home`);
   route();
   // 隠れた操作（長押しでお気に入り）を一度だけ知らせる
   try {

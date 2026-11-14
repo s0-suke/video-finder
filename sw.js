@@ -19,6 +19,8 @@ const SHELL = [
   './js/db.js',
   './js/wp.js',
   './js/matching.js',
+  './js/actors-core.js',
+  './js/actors.js',
   './js/studios.js',
   './js/data.js',
   './js/crawler.js',
@@ -41,8 +43,10 @@ const SHELL = [
   './js/ui/filters.js',
   './js/ui/settings.js',
   './js/ui/studios.js',
+  './js/ui/home.js',
+  './js/ui/search.js',
+  './js/ui/actors.js',
   './js/ui/tabbar.js',
-  './js/ui/continue.js',
   './js/actor.js',
 ];
 

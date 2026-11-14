@@ -42,6 +42,13 @@ function matches(v, words) {
   return words.every((w) => v.hay.includes(w) || (v.code && /\d/.test(w) && normalizeCode(v.code).toLowerCase().includes(w.replace(/-/g, ''))));
 }
 
+/** キーワードで動画を探す（検索タブの「動画」。タイトル・品番・タグ・スタジオ名。新しい順） */
+export function searchVideos(q) {
+  const words = normalizeQuery(q || '').split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  return state.videos.filter((v) => matches(v, words));
+}
+
 function applyFilters() {
   const words = normalizeQuery(filters.q).split(/\s+/).filter(Boolean);
   const siteId = filters.site ? +filters.site : null;
@@ -114,7 +121,6 @@ export function render(reset = true) {
   $('#grid').insertAdjacentHTML('beforeend', next.map((v, k) => cardHTML(v, shown + k)).join(''));
   shown += next.length;
   renderMeta();
-  if (reset) emit('listrender'); // ホームの「最近見た動画」（continue.js）が出し分ける
   $('#list-state').innerHTML = filtered.length
     ? ''
     : activeConditions().some((c) => !c.order) ? '該当する動画がありません<div class="btn-row" style="justify-content:center"><button class="btn" data-clear="all">すべての条件を外す</button></div>'

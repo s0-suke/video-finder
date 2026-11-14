@@ -1,9 +1,8 @@
-// スタジオのタブ（#studios）
+// ホームの「スタジオ」のパネル（#hp-studios）
 //
-// スタジオごとに「名前 + 最新の動画のカルーセル」を縦に並べた、独立したページ。
+// スタジオごとに「名前 + 最新の動画のカルーセル」を縦に並べる（受動的に見つける。探すのは検索タブの「スタジオ」）。
 // - お気に入りのスタジオを一番上に（ホームのチップと同じ順）、そのあとは動画の多い親（会社・メーカー）から
 // - カルーセルは、そのスタジオ（親なら子のレーベルも含む）の新しい動画。カードを押すと詳細、名前や「すべて」を押すとそのスタジオのホーム
-// - 上の検索欄でスタジオ名を探せる。「階層」で、親子の入れ子の一覧（絞り込みのシートと同じもの）も開ける
 // - お気に入りは localStorage の vfFavStudios（{ スタジオの key: 名前 }）。アプリ（iOS）がホームのチップに出すのと同じもの。
 //   変えたら window に vfFavsChanged を送る（アプリ側のスクリプトが受けて、ホームのチップの並びを合わせる）
 
@@ -12,10 +11,10 @@ import { state, on, isNew } from '../data.js';
 import { descendantKeys } from '../studios.js';
 import { feature } from '../features.js';
 import { filters, saveFilters, renderChips } from './list.js';
-import { openStudioPicker } from './filters.js';
 import { openDetail } from './detail.js';
 
-export const isStudiosOpen = () => location.hash === '#studios';
+/** このパネルが、いま見えているか（ホームのページで、スタジオのパネルが開いている） */
+export const isStudiosOpen = () => location.hash === '#home' && !$('#hp-studios-wrap').classList.contains('hidden');
 
 const FAV_KEY = 'vfFavStudios';
 const PER_ROW = 12; // カルーセルの動画の数
@@ -62,11 +61,6 @@ function rootsByNewest() {
 function buildOrder() {
   const favs = loadFavs();
   const byKey = new Map(state.studios.map((s) => [s.key, s]));
-  const w = $('#studio-q').value.trim().normalize('NFKC').toLowerCase();
-  if (w) {
-    return state.studios.filter((s) => s.name.normalize('NFKC').toLowerCase().includes(w) && s.total > 0)
-      .slice(0, 60).map((s) => ({ s, fav: s.key in favs }));
-  }
   const out = [];
   const seen = new Set();
   for (const k of Object.keys(favs)) {
@@ -169,10 +163,6 @@ function goHomeWith(key) {
 
 function init() {
   built = true;
-  const q = $('#studio-q');
-  let timer = 0;
-  q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(() => paint(), 150); });
-  $('#studio-tree').onclick = () => openStudioPicker(goHomeWith); // 親子の入れ子の一覧（選ぶと、そのスタジオのホーム）
   bindThumbFallback($('#studio-feed'));
   // 並び順: 動画の多い順 / 最新の動画が新しい順（お気に入りは、どちらでも先頭）
   const paintSort = () => { for (const b of document.querySelectorAll('#studio-sort button')) { const on = b.dataset.sort === loadSort(); b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } };

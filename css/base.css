@@ -327,14 +327,6 @@ details.more[open] summary { margin-bottom: 4px; }
 .version-entry li { margin: 2px 0; }
 
 /* ホームの「最近見た動画」 */
-.continue { padding: 10px 12px 2px; }
-.continue-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; font-size: 14px; font-weight: 600; }
-.continue-head .link { font-size: 13px; font-weight: 400; }
-.continue .related { margin: 0 -12px; padding: 0 12px 4px; scroll-padding: 0 12px; }
-.continue .rel { width: 132px; }
-.continue .thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; background: var(--surface-2); }
-.continue .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.continue .thumb .ph { height: 100%; display: grid; place-items: center; font-size: 11px; color: var(--muted); padding: 4px; text-align: center; }
 .continue-now { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; }
 
 /* お気に入り｜履歴 の切り替え（iOS の分割コントロールに合わせる） */
@@ -367,3 +359,67 @@ details.more[open] summary { margin-bottom: 4px; }
 /* タップ領域を 44pt に広げる（Apple の HIG）。見た目は変えない */
 .toggle::before { content: ''; position: absolute; inset: -8px -4px; }
 .picker-toggle { width: 44px; }
+
+/* ───────── ホーム（受動的に見つける）・検索・出演者 ───────── */
+header.top.home-top { padding-bottom: 0; position: sticky; top: 0; z-index: 8; }
+.home-tabs { display: flex; gap: 4px; padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
+.home-tabs::-webkit-scrollbar { display: none; }
+.home-tabs button { flex: 1 0 auto; min-height: 44px; padding: 0 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; }
+.home-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.hpanel { min-height: 50vh; }
+.hpanel.slide-l { animation: slide-in-l .22s ease; }
+.hpanel.slide-r { animation: slide-in-r .22s ease; }
+@keyframes slide-in-l { from { transform: translateX(32px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes slide-in-r { from { transform: translateX(-32px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .hpanel.slide-l, .hpanel.slide-r { animation: none; } }
+.hrow { padding-left: 12px; }
+.hrow .sf-head { padding-left: 0; }
+.hrow-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 8px 0; }
+.hrow-title small { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.hrow .sf-row { padding-left: 0; margin-right: 0; }
+.hrow .sf-row .card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hrow .sf-all { padding-right: 12px; }
+.av-row .av-card { flex: none; width: 84px; background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text); }
+.av-name { font-size: 12px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 代表画像（丸） */
+.av { flex: none; width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #2a2540, #1c1c22); display: grid; place-items: center; position: relative; }
+.av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.av-ph { color: var(--muted); font-size: 20px; font-weight: 700; }
+.av-md { width: 68px; height: 68px; }
+.av-lg { width: 84px; height: 84px; }
+
+/* 出演者の一覧の行 */
+.actor-list { padding: 0 12px; }
+.actor-row { display: flex; align-items: center; gap: 12px; min-height: 68px; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+.actor-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ar-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ar-name { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-sub, .ar-tags { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-tags { color: var(--accent); opacity: .85; }
+.ar-n { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; flex: none; }
+.ar-n small { font-size: 11px; margin-left: 1px; }
+.heart-btn { flex: none; width: 44px; height: 44px; background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; }
+.heart-btn.on { color: #ff5a7a; }
+
+/* 出演者の詳細ページ */
+#view-actor .page { padding-top: 0; }
+.ap-head { display: flex; align-items: center; gap: 14px; padding: 4px 0 8px; }
+.ap-title { flex: 1; min-width: 0; }
+.ap-title h1 { font-size: 22px; margin: 0 0 4px; display: block; }
+.ap-alias { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+.ap-attrs, .ap-tags, .ap-stats, .ap-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; align-items: center; }
+.ap-attr { padding: 6px 12px; border-radius: 16px; background: var(--surface-2); font-size: 14px; font-weight: 600; }
+.ap-attr.soft { font-weight: 400; color: var(--muted); }
+.ap-tags .dt-chip small { color: var(--muted); }
+.ap-stats { gap: 16px; font-size: 14px; }
+.ap-stats small { color: var(--muted); font-size: 12px; }
+.page-title { font-size: 17px; font-weight: 600; padding: 0 12px; }
+.list-nav { padding: 0 4px; }
+.back-btn { min-height: 44px; padding: 0 12px; background: none; border: 0; color: var(--accent); font-size: 16px; }
+.search-sort { padding: 8px 12px 0; font-size: 13px; color: var(--muted); }
+.search-sort select { font-size: 14px; margin-left: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+#view-search .seg, #view-favactors .seg { margin-top: 8px; }
+#view-search #search-pane-studios { padding: 0 12px; }
+#view-search .state, #view-favactors .state { padding: 24px 12px; }
+.seg.lib { margin-top: 10px; }

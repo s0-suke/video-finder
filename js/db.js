@@ -9,9 +9,10 @@
 //   history  視聴履歴               keyPath: key（統合キー）
 //   details  外部サイトの詳細情報のキャッシュ  keyPath: key（統合キー）
 //   release  発売日の目安用の otokoki 記事（id・日付・品番・タイトルキー）  keyPath: id
+//   actors   出演者データベース（otokoki の出演者カテゴリ + プロフィール）    keyPath: id
 
 const DB_NAME = 'video-finder';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let db;
 
@@ -33,6 +34,9 @@ export function openDB() {
       }
       if (e.oldVersion < 3) {
         d.createObjectStore('release', { keyPath: 'id' });
+      }
+      if (e.oldVersion < 4) {
+        d.createObjectStore('actors', { keyPath: 'id' });
       }
     };
     r.onsuccess = () => {
