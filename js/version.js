@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.16.0';
+export const VERSION = '1.16.1';
 
 export const CHANGELOG = [
+  {
+    version: '1.16.1',
+    date: '2026-11-15',
+    items: [
+      '出演者ページで、プロフィール写真（端末の写真から選ぶ）と公式サイトの URL を自分で登録できるようにした。登録した写真は一覧・ホームの出演者にも使われる。この端末の中だけに保存される',
+    ],
+  },
   {
     version: '1.16.0',
     date: '2026-11-15',

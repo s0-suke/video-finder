@@ -8,7 +8,7 @@
 import { $, esc, toast } from '../util.js';
 import { on } from '../data.js';
 import { actorSummary } from '../actors-core.js';
-import { allActors, getActor, searchActors, enrich, videosOf, ageOf, isFavActor, favActorIds, toggleFavActor } from '../actors.js';
+import { allActors, getActor, searchActors, enrich, videosOf, ageOf, isFavActor, favActorIds, toggleFavActor, setCustom, photoOf } from '../actors.js';
 import { openDetail } from './detail.js';
 
 const PAGE = 50;
@@ -32,7 +32,7 @@ export const actorIdFromHash = () => {
 // ───────────── 部品 ─────────────
 
 const avatarHTML = (a) => {
-  const photo = a.profile && a.profile.photo;
+  const photo = photoOf(a);
   return `<span class="av" data-av="${a.id}">${photo ? `<img src="${esc(photo)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<span class="av-ph">${esc(initial(a))}</span>`}</span>`;
 };
 
@@ -63,7 +63,7 @@ function refreshRow(root, a) {
   const row = root.querySelector(`.actor-row[data-actor="${a.id}"]`);
   if (!row) return;
   const av = row.querySelector('.av');
-  const photo = a.profile && a.profile.photo;
+  const photo = photoOf(a);
   if (photo && av && !av.querySelector('img')) av.innerHTML = `<img src="${esc(photo)}" loading="lazy" referrerpolicy="no-referrer" alt="">`;
   const tmp = document.createElement('div');
   tmp.innerHTML = actorRowHTML(a);
@@ -218,7 +218,15 @@ export function renderActorPage(id) {
       <div class="ap-links">
         <button class="btn" type="button" data-act="search-words">名前で動画を探す</button>
         ${cur.link ? `<a class="btn" href="${esc(cur.link)}" target="_blank" rel="noopener noreferrer">otokoki で見る ↗</a>` : ''}
+        ${safeUrl(cur.custom && cur.custom.site) ? `<a class="btn" href="${esc(cur.custom.site)}" target="_blank" rel="noopener noreferrer">公式サイト ↗</a>` : ''}
       </div>
+      <div class="ap-links">
+        <button class="btn ghost" type="button" data-act="set-photo">写真を設定</button>
+        ${cur.custom && cur.custom.photo ? '<button class="btn ghost" type="button" data-act="clear-photo">写真を外す</button>' : ''}
+        <button class="btn ghost" type="button" data-act="set-site">公式サイトを登録</button>
+        <input type="file" accept="image/*" id="ap-file" hidden>
+      </div>
+      <div class="note">写真・公式サイトは、この端末の中だけに保存されます</div>
       <div class="section-title">手元の出演作</div>
       ${p.full ? '' : '<div class="note" id="ap-loading">出演作を照合しています…</div>'}
       <div class="grid" id="ap-grid">${vids.slice(0, PER_ROW_GRID).map((v, i) => workCardHTML(v, i)).join('')}</div>
@@ -246,12 +254,39 @@ function workCardHTML(v, i) {
   </button>`;
 }
 
+const safeUrl = (u) => { try { return /^https?:$/.test(new URL(u).protocol) ? u : ''; } catch { return ''; } };
+
+/** 選んだ画像を 256px 四方（中央切り抜き）の JPEG にして data URL で返す */
+async function shrink(file) {
+  const bmp = await createImageBitmap(file);
+  const n = Math.min(bmp.width, bmp.height), S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  c.getContext('2d').drawImage(bmp, (bmp.width - n) / 2, (bmp.height - n) / 2, n, n, 0, 0, S, S);
+  return c.toDataURL('image/jpeg', 0.85);
+}
+
 export function initActorPage({ onSearchWords, onBack }) {
   const root = $('#view-actor-body');
+  root.addEventListener('change', async (e) => {
+    if (e.target.id !== 'ap-file' || !e.target.files[0]) return;
+    try { await setCustom(+root.dataset.id, { photo: await shrink(e.target.files[0]) }); } catch { toast('画像を読み込めませんでした'); }
+    renderActorPage(+root.dataset.id);
+  });
   root.addEventListener('click', (e) => {
     const heart = e.target.closest('[data-fav-actor]');
     if (heart) return onHeart(+heart.dataset.favActor);
     if (e.target.closest('[data-act="to-search"]')) return onBack();
+    if (e.target.closest('[data-act="set-photo"]')) return $('#ap-file').click();
+    if (e.target.closest('[data-act="clear-photo"]')) return setCustom(+root.dataset.id, { photo: '' }).then(() => renderActorPage(+root.dataset.id));
+    if (e.target.closest('[data-act="set-site"]')) {
+      const a = getActor(+root.dataset.id);
+      const u = prompt('公式サイトの URL（空にすると消えます）', (a && a.custom && a.custom.site) || 'https://');
+      if (u === null) return;
+      const v = u.trim();
+      if (v && !safeUrl(v)) return toast('http(s) の URL を入れてください');
+      return setCustom(+root.dataset.id, { site: v === 'https://' ? '' : v }).then(() => renderActorPage(+root.dataset.id));
+    }
     if (e.target.closest('[data-act="search-words"]')) {
       const a = getActor(+root.dataset.id);
       return a && onSearchWords(a);

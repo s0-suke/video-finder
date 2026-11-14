@@ -207,6 +207,24 @@ export function videosOf(a) {
   return out;
 }
 
+// ───────────── 自分で足す情報（端末内だけ） ─────────────
+
+/** 写真（縮小した data URL）・公式サイトの URL を、自分で登録する。空文字で消す。索引の更新でも残る */
+export async function setCustom(id, patch) {
+  const a = state.actors.get(+id);
+  if (!a) return null;
+  const custom = { ...(a.custom || {}), ...patch };
+  for (const k of Object.keys(custom)) if (!custom[k]) delete custom[k];
+  const row = { ...a, custom };
+  await db.put('actors', row);
+  state.actors.set(row.id, row);
+  emit('actors');
+  return row;
+}
+
+/** 表示する写真: 自分で登録したものを優先 */
+export const photoOf = (a) => (a.custom && a.custom.photo) || (a.profile && a.profile.photo) || null;
+
 // ───────────── お気に入り ─────────────
 
 const FAV_KEY = 'vfFavActors';
