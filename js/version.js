@@ -6,9 +6,18 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.15.0';
+export const VERSION = '1.16.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.16.0',
+    date: '2026-11-15',
+    items: [
+      'タブを「ホーム・お気に入り・検索・設定」の 4 つにした。ホームは「おすすめ・新着・スタジオ・出演者」を左右スワイプで行き来しながら、見て回れる作りに',
+      '検索タブを新設: 「スタジオ｜出演者｜動画」から、能動的に探せる。スタジオはお気に入りも付けられる',
+      '出演者データベースを追加（otokoki.net の出演者約 2,200 人）。一覧・並び替え・名前や特徴での検索、出演者ページ（代表画像・別名・レーベル・身長・体重・年齢・タグ・出演作）、出演者のお気に入り（お気に入りタブの「出演者」）。代表画像は出演作のサムネイル',
+    ],
+  },
   {
     version: '1.15.0',
     date: '2026-11-13',

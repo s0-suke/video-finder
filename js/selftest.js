@@ -110,7 +110,11 @@ export async function runSelftest() {
     tab('settings'); await wait(500);
     assert(!$('#view-settings').classList.contains('hidden'), '設定が出ない');
     assert($$('#settings-extra .section-title').length >= 3, '設定の項目が足りない');
+    // 履歴を開いたままにしない（以降の一覧のテストは、すべての動画で走らせる）
+    Object.assign(filters, { view: '', q: '', studio: '', actor: '', site: '' });
+    saveFilters(); renderChips();
     await listPage();
+    render();
     assert(!$('#view-list').classList.contains('hidden'), '一覧に戻らない');
   });
 
