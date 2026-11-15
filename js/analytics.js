@@ -147,7 +147,16 @@ async function share() {
 async function copy() {
   const json = JSON.stringify(exportObj(), null, 2);
   try { await navigator.clipboard.writeText(json); toast('コピーしました。Claude に貼り付けてください'); }
-  catch { toast('コピーできませんでした。「書き出す」を使ってください'); }
+  catch {
+    // クリップボードの API が使えないときの代わり（選択してコピー）
+    const ta = document.createElement('textarea');
+    ta.value = json; ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { /* 無視 */ }
+    ta.remove();
+    toast(ok ? 'コピーしました。Claude に貼り付けてください' : 'コピーできませんでした。「書き出す」を使ってください');
+  }
 }
 
 function renderSection(el) {

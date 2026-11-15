@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.17.0';
+export const VERSION = '1.17.1';
 
 export const CHANGELOG = [
+  {
+    version: '1.17.1',
+    date: '2026-11-15',
+    items: [
+      '利用データの「コピー」が、クリップボードを使えない環境でも動くようにした。ホームを開いたとき、下のタブの選択表示がずれることがあるのを直した',
+    ],
+  },
   {
     version: '1.17.0',
     date: '2026-11-15',
