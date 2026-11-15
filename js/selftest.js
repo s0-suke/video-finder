@@ -10,6 +10,7 @@ import { allActors, getActor, isFavActor, toggleFavActor } from './actors.js';
 import * as db from './db.js';
 import { filters, saveFilters, render, renderChips, setActor } from './ui/list.js';
 import { recentKeys } from './history.js';
+import { isFav } from './favorites.js';
 import { isSheetOpen, miniPlayer } from './ui/sheet.js';
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -257,14 +258,14 @@ export async function runSelftest() {
     assert(!JSON.parse(localStorage.getItem('filters3') || '{}').actor, '出演者の絞り込みが保存されている');
   });
 
-  await check('ホーム: 4 つの切り替え（おすすめ・新着・スタジオ・出演者）が、タップで行き来でき、スタジオはカルーセル・お気に入りが上に来る', async () => {
+  await check('ホーム: 5 つの切り替え（新着・続き・おすすめ・スタジオ・出演者）が、タップで行き来でき、スタジオはカルーセル・お気に入りが上に来る', async () => {
     const parent = state.studios.find((s) => !s.parent && s.total > 0);
     const saved = localStorage.getItem('vfFavStudios');
     try {
       localStorage.removeItem('vfFavStudios');
       await goto('#home');
       const panelBtn = (p) => $(`#home-tabs [data-p="${p}"]`);
-      for (const p of ['rec', 'new', 'studios', 'actors']) assert(panelBtn(p), `${p} の切り替えがない`);
+      for (const p of ['new', 'cont', 'rec', 'studios', 'actors']) assert(panelBtn(p), `${p} の切り替えがない`);
       panelBtn('rec').click(); await wait(500);
       assert($('#hp-rec .sf, #hp-rec .state'), 'おすすめが出ない');
       panelBtn('new').click(); await wait(500);
@@ -304,16 +305,41 @@ export async function runSelftest() {
 
   await check('ホーム: 左右のスワイプで切り替えが行き来できる', async () => {
     await goto('#home');
-    $('#home-tabs [data-p="rec"]').click(); await wait(400);
+    $('#home-tabs [data-p="new"]').click(); await wait(400);
     const root = $('#view-home');
     const touch = (type, x, y) => {
       const t = new Touch({ identifier: 1, target: root, clientX: x, clientY: y });
       root.dispatchEvent(new TouchEvent(type, { touches: type === 'touchend' ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true }));
     };
     touch('touchstart', 300, 400); touch('touchend', 120, 405); await wait(500);
-    assert(!$('#hp-new-wrap').classList.contains('hidden'), '左へスワイプしても、次の「新着」にならない');
+    assert(!$('#hp-cont-wrap').classList.contains('hidden'), '左へスワイプしても、次の「続き」にならない');
     touch('touchstart', 100, 400); touch('touchend', 280, 402); await wait(500);
-    assert(!$('#hp-rec-wrap').classList.contains('hidden'), '右へスワイプしても、前の「おすすめ」に戻らない');
+    assert(!$('#hp-new-wrap').classList.contains('hidden'), '右へスワイプしても、前の「新着」に戻らない');
+  });
+
+  await check('ホーム: 新着のカードのハートで、開かずにお気に入りにでき、「続き」に出て、利用データに記録される', async () => {
+    await goto('#home');
+    $('#home-tabs [data-p="new"]').click(); await wait(500);
+    const card = $('#hp-new-grid .card');
+    assert(card && card.querySelector('[data-qfav]'), '新着のカードにハートがない');
+    const key = card.dataset.key;
+    const had = isFav(key);
+    card.querySelector('[data-qfav]').click(); await wait(400);
+    assert(isFav(key) !== had, 'ハートでお気に入りが変わらない');
+    assert(!document.querySelector('.sheet.open'), 'ハートを押したのに詳細が開いた');
+    assert($(`#hp-new-grid [data-qfav="${CSS.escape(key)}"]`).classList.contains('on') === !had, 'ハートの見た目が変わらない');
+    $('#home-tabs [data-p="cont"]').click(); await wait(500);
+    assert(had || [...document.querySelectorAll('#hp-cont .card')].some((c) => c.dataset.key === key), '「続き」にお気に入りが出ない');
+    // もとに戻す
+    $('#home-tabs [data-p="new"]').click(); await wait(400);
+    if (isFav(key) !== had) $(`#hp-new-grid [data-qfav="${CSS.escape(key)}"]`).click();
+    await wait(300);
+    assert(isFav(key) === had, 'お気に入りを元に戻せない');
+    const ua = await import('./analytics.js');
+    const us = await import('./usage-core.js');
+    ua.track('tap', { k: 'selftest', at: 'x' });
+    const n = us.summarize([{ t: Date.now(), e: 'launch' }]).sessions;
+    assert(n === 1, '利用データの集計ができない');
   });
 
   await check('検索タブ: 出演者の一覧から出演者のページを開き、♥ でお気に入りにできる', async () => {

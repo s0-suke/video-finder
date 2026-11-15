@@ -364,7 +364,7 @@ details.more[open] summary { margin-bottom: 4px; }
 header.top.home-top { padding-bottom: 0; position: sticky; top: 0; z-index: 8; }
 .home-tabs { display: flex; gap: 4px; padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
 .home-tabs::-webkit-scrollbar { display: none; }
-.home-tabs button { flex: 1 0 auto; min-height: 44px; padding: 0 14px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; }
+.home-tabs button { flex: 1 0 auto; min-height: 44px; padding: 0 10px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; }
 .home-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
 .hpanel { min-height: 50vh; }
 .hpanel.slide-l { animation: slide-in-l .22s ease; }
@@ -423,3 +423,16 @@ header.top.home-top { padding-bottom: 0; position: sticky; top: 0; z-index: 8; }
 #view-search #search-pane-studios { padding: 0 12px; }
 #view-search .state, #view-favactors .state { padding: 24px 12px; }
 .seg.lib { margin-top: 10px; }
+
+/* ホーム: カードのハート（開かずにお気に入り）・「前回から」の区切り・続きのヒーロー */
+.thumb { position: relative; }
+.qfav { position: absolute; right: 4px; bottom: 4px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 19px; line-height: 1; color: #fff; background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.qfav.on { color: #ff5a7a; }
+.qfav:active { transform: scale(.9); }
+.new-divider { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; color: var(--accent); font-size: 12px; font-weight: 600; padding: 6px 0 2px; }
+.new-divider::before, .new-divider::after { content: ''; flex: 1; height: 1px; background: var(--border, rgba(255,255,255,.14)); }
+#hp-new-meta b { color: var(--text); }
+.cont-hero { padding: 8px 12px 4px; }
+.cont-hero .card .thumb { aspect-ratio: 16 / 9; }
+.cont-hero .card .title { font-size: 15px; -webkit-line-clamp: 2; }
+.cont-play { position: absolute; left: 10px; bottom: 10px; padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: 700; color: var(--accent-text, #fff); background: var(--accent); }

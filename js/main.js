@@ -8,6 +8,7 @@ import * as player from './player.js';
 import * as favorites from './favorites.js';
 import * as details from './details.js';
 import * as history from './history.js';
+import { initAnalytics, trackView } from './analytics.js';
 import { initActors } from './actors.js';
 import { initRelease, loadRelease, collectRelease } from './release.js';
 import * as features from './features.js';
@@ -21,8 +22,8 @@ import { initTabbar } from './ui/tabbar.js';
 import { openHome } from './ui/home.js';
 import { openSearch } from './ui/search.js';
 import { renderActorPage, initActorPage, actorIdFromHash, renderFavActors } from './ui/actors.js';
-import { pageOf, rememberBack, goBack, switchHash } from './ui/tabbar.js';
-import { setQuery } from './ui/list.js';
+import { pageOf, rememberBack, goBack, switchHash, renderTabs } from './ui/tabbar.js';
+import { setQuery, filters } from './ui/list.js';
 
 // 開いているページだけを表示する。ページは URL のハッシュで決まる（ui/tabbar.js の pageOf）
 const PAGES = { list: '#view-list', home: '#view-home', search: '#view-search', actor: '#view-actor', favactors: '#view-favactors', settings: '#view-settings' };
@@ -36,7 +37,9 @@ function route() {
   if (lastPage && lastPage !== page) rememberBack(lastHash);
   lastPage = page;
   lastHash = location.hash;
+  if (page !== 'home') trackView(page === 'list' ? `list:${filters.view || 'all'}` : page); // ホームはパネルごとに記録する（ui/home.js）
   window.scrollTo(0, 0);
+  renderTabs(); // 起動時のように、ハッシュを直接書き換えたあとでもタブの選択表示を合わせる
   if (page === 'settings') openSettings();
   else if (page === 'home') openHome();
   else if (page === 'search') openSearch();
@@ -69,7 +72,7 @@ async function boot() {
   rebuild();
   await initCrawler();
   features.init();
-  await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease(), initActors()]);
+  await Promise.all([favorites.init(), history.init(), player.init(), details.init(), initRelease(), initActors(), initAnalytics()]);
 
   version.init();
   initSheet();

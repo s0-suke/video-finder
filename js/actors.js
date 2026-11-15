@@ -45,6 +45,17 @@ function resort() {
   sorted = [...state.actors.values()].sort((a, b) => (b.count || 0) - (a.count || 0) || a.display.localeCompare(b.display, 'ja'));
 }
 
+/** 名前（別名を含む）が一致する出演者。表記のゆれ（全角半角・大文字小文字・空白）は無視。同名が複数なら作品数の多い人 */
+export function findActor(name) {
+  const norm = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+  const w = norm(name);
+  if (!w) return null;
+  for (const a of sorted) {
+    if (norm(a.display) === w || (a.aliases || []).some((x) => norm(x) === w)) return a;
+  }
+  return null;
+}
+
 /** 作品数の多い順の出演者（配列。呼び出し側で変更しない） */
 export const allActors = () => sorted;
 export const getActor = (id) => state.actors.get(+id) || null;

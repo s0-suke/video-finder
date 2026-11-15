@@ -10,7 +10,7 @@
 // シートの高さは一定にして、動画を切り替えてもボタンの位置が動かないようにする。
 
 import { esc, fmtDate, bindThumbFallback } from '../util.js';
-import { state, on } from '../data.js';
+import { state, on, isNew } from '../data.js';
 import { loadContent } from '../source.js';
 import { mountPlayer } from '../player.js';
 import { favButton } from '../favorites.js';
@@ -21,6 +21,8 @@ import { feature } from '../features.js';
 import { openSheet, closeSheet, miniPlayer, expandMini, closeMini } from './sheet.js';
 import { setQuery, setStudio } from './list.js';
 import { showActor } from '../actor.js';
+import { findActor } from '../actors.js';
+import { track, usageContext, currentSurface } from '../analytics.js';
 
 const RELATED = 12;
 
@@ -40,7 +42,7 @@ function go(step) {
   if (!nav) return;
   const i = nav.index + step;
   if (i < 0 || i >= nav.list.length) return;
-  openDetail(nav.list[i], { list: nav.list, index: i });
+  openDetail(nav.list[i], { list: nav.list, index: i, src: 'step' });
 }
 
 function goBack() {
@@ -93,6 +95,7 @@ export function openDetail(video, opts = {}) {
   if (m && m.dataset.key === video.key) return expandMini();
   nav = opts.list && feature('swipeNav') ? { list: opts.list, index: opts.index } : null;
   if (!opts.keepBack && !opts.fromRelated) back = [];
+  track('open', { src: opts.src || (opts.fromRelated ? 'related' : opts.keepBack ? 'back' : currentSurface()), newV: isNew(video), ...usageContext() });
 
   const el = document.createElement('div');
   el.className = 'detail';
@@ -137,7 +140,13 @@ export function openDetail(video, opts = {}) {
   mountDetails(el.querySelector('[data-role="details"]'), video, {
     onTag: (t) => { closeSheet(); setQuery(t); },
     onStudio: (key) => { closeSheet(); setStudio(key); },
-    onActor: (name, q) => { closeSheet(); showActor(name, q); },
+    // 出演者データベースにいる人なら、その人のページ（出演作の一覧）へ。いなければキーワードで絞り込む
+    onActor: (name, q) => {
+      const a = findActor(name);
+      closeSheet();
+      if (a) import('./actors.js').then((m) => m.gotoActor(a.id));
+      else showActor(name, q);
+    },
   });
 
   const main = el.querySelector('.play-main');
@@ -146,6 +155,7 @@ export function openDetail(video, opts = {}) {
     mountPlayer(hero, url);
     el.closest('.sheet').scrollTo({ top: 0, behavior: 'smooth' });
     recordView(video);
+    track('play', usageContext());
     main.textContent = '↻ 読み込み直す';
     main.dataset.embed = url; // 今見ているプレイヤーを読み込み直す
   };

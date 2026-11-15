@@ -18,6 +18,7 @@ import * as db from './db.js';
 import { state, on, emit, relocate, sourceKeys } from './data.js';
 import { toast, esc } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
+import { track, currentSurface } from './analytics.js';
 
 const STORE = 'favs';
 const rows = new Map(); // key -> 保存している行
@@ -35,6 +36,9 @@ export async function init() {
 }
 
 export const isFav = (key) => rows.has(key);
+
+/** お気に入りの動画の key（追加が新しい順） */
+export const favKeys = () => [...rows.values()].sort((a, b) => b.addedAt - a.addedAt).map((r) => r.key);
 
 // お気に入りに追加した時刻（一覧を追加順に並べるのに使う）
 export const favAddedAt = (key) => rows.get(key)?.addedAt || 0;
@@ -70,6 +74,7 @@ export async function toggleFav(video) {
     toast('お気に入りを保存できませんでした');
     throw err;
   }
+  track('fav', { on: !before, src: currentSurface() });
   return !before;
 }
 

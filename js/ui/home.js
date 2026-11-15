@@ -1,12 +1,16 @@
 // ホーム（#home）: 受動的に見つけるためのページ。上の切り替えを、左右のスワイプでも行き来できる
+//   新着     … 前回開いてから増えた動画を先頭に（区切り線つき）。カードのハートで、開かずにお気に入りにできる。最初に開くパネル
+//   続き     … 最近見た動画・お気に入りの動画・最近見たスタジオの他の動画（過去の動画を見返す・漁る入口）
 //   おすすめ … 横に並べた行（続きを見る / お気に入りのスタジオの新作 / お気に入りの出演者の新作 / 新着 / 今日の発見 / 人気のスタジオ）
 //   新着     … 新しく見つかった動画（新しい順）。無限スクロール
 //   スタジオ … スタジオごとの最新動画のカルーセル（ui/studios.js）
 //   出演者   … お気に入りの出演者と、人気の出演者（代表画像つき）
 // 検索（自分から探す）は検索タブ（ui/search.js）。ここには検索欄を置かない。
 
-import { $, esc } from '../util.js';
+import { $, esc, toast } from '../util.js';
 import { state, on, isNew } from '../data.js';
+import { isFav, toggleFav, favKeys } from '../favorites.js';
+import { track, trackView } from '../analytics.js';
 import { descendantKeys } from '../studios.js';
 import { recentKeys } from '../history.js';
 import { feature } from '../features.js';
@@ -17,22 +21,30 @@ import { gotoActor } from './actors.js';
 import { openStudios } from './studios.js';
 import { miniPlayer } from './sheet.js';
 
-const PANELS = ['rec', 'new', 'studios', 'actors'];
-const PANEL_KEY = 'homePanel';
+const PANELS = ['new', 'cont', 'rec', 'studios', 'actors'];
 const ROW = 12;
 const NEW_PAGE = 30;
 
-let panel = 'rec';
+let panel = 'new';
 let built = false;
 const scrollAt = {}; // パネルごとのスクロール位置
 let newShown = 0;
 let newList = [];
 
-const loadPanel = () => { try { const v = localStorage.getItem(PANEL_KEY); return PANELS.includes(v) ? v : 'rec'; } catch { return 'rec'; } };
 export const isHomeOpen = () => location.hash === '#home';
 export const homePanel = () => panel;
 
 // ───────────── 部品 ─────────────
+
+/** カードのハートの見た目を、お気に入りの状態に合わせる（el を渡さなければ探す） */
+function paintQfav(key, el) {
+  const on = isFav(key);
+  for (const q of el ? [el] : document.querySelectorAll(`#view-home [data-qfav="${CSS.escape(key)}"]`)) {
+    q.classList.toggle('on', on);
+    q.setAttribute('aria-pressed', String(on));
+    q.textContent = on ? '♥' : '♡';
+  }
+}
 
 const thumbCard = (v) => `<button class="card" data-key="${esc(v.key)}">
   <div class="thumb">
@@ -40,6 +52,7 @@ const thumbCard = (v) => `<button class="card" data-key="${esc(v.key)}">
     ${v.code ? `<span class="badge code">${esc(v.code)}</span>` : ''}
     ${feature('newBadge') && isNew(v) ? '<span class="badge new">NEW</span>' : ''}
     ${miniPlayer() && miniPlayer().dataset.key === v.key ? '<span class="continue-now">再生中</span>' : ''}
+    <span class="qfav${isFav(v.key) ? ' on' : ''}" role="button" aria-label="お気に入り" aria-pressed="${isFav(v.key)}" data-qfav="${esc(v.key)}">${isFav(v.key) ? '♥' : '♡'}</span>
   </div>
   <div class="title">${esc(v.title)}</div>
   ${v.studio ? `<div class="sub">${esc(v.studio)}</div>` : ''}
@@ -141,22 +154,95 @@ function buildRec() {
 
 // ───────────── 新着 ─────────────
 
+// 前回ホームを開いた（アプリを閉じた）時刻。これより後に見つかった動画を「前回から」の新着とする
+const SEEN_KEY = 'homeLastSeen';
+const DAY = 24 * 60 * 60 * 1000;
+const readSeen = () => { try { return +localStorage.getItem(SEEN_KEY) || 0; } catch { return 0; } };
+let prevVisit = readSeen();
+let dividerDone = false;
+let sinceCount = 0;
+const touchSeen = () => { try { localStorage.setItem(SEEN_KEY, String(Date.now())); } catch { /* 保存できなくても動く */ } };
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') touchSeen();
+  else if (Date.now() - readSeen() > 30 * 60 * 1000) { prevVisit = readSeen(); if (isHomeOpen() && panel === 'new') buildNew(); }
+});
+addEventListener('pagehide', touchSeen);
+
+const fmtSince = (t) => {
+  const d = new Date(t), now = new Date();
+  const hm = `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const days = Math.floor((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / DAY);
+  return days <= 0 ? `今日 ${hm}` : days === 1 ? `昨日 ${hm}` : `${d.getMonth() + 1}/${d.getDate()} ${hm}`;
+};
+
 function buildNew() {
-  newList = state.videos.filter(isNew);
-  // 新着の印がまだ付かない（はじめての全件取得の分など）ときは、掲載日の新しい順に出す
+  // 前回から（なければ直近 3 日）に見つかった動画を、見つかった順に。長く開かなかったときも取りこぼさない（最大 14 日）
+  const now = Date.now();
+  const cutoff = prevVisit ? Math.max(Math.min(prevVisit, now - 3 * DAY), now - 14 * DAY) : now - 3 * DAY;
+  newList = state.videos.filter((v) => v.seenAt > cutoff).sort((a, b) => b.seenAt - a.seenAt);
+  sinceCount = prevVisit ? newList.filter((v) => v.seenAt > prevVisit).length : 0;
   const fresh = newList.length;
+  // 新着の印がまだ付かない（はじめての全件取得の分など）ときは、掲載日の新しい順に出す
   if (!fresh) newList = state.videos.slice(0, 300);
   newShown = 0;
+  dividerDone = !prevVisit || !fresh;
   $('#hp-new-grid').innerHTML = '';
-  $('#hp-new-meta').textContent = fresh ? `${fresh.toLocaleString()} 本の新着` : '新着の印の付いた動画はありません。掲載日の新しい順に出します';
+  $('#hp-new-meta').innerHTML = !fresh
+    ? '新着の印の付いた動画はありません。掲載日の新しい順に出します'
+    : !prevVisit
+      ? `${fresh.toLocaleString()} 本の新着`
+      : sinceCount
+        ? `<b>前回（${esc(fmtSince(prevVisit))}）から ${sinceCount.toLocaleString()} 本</b>の新着`
+        : `前回（${esc(fmtSince(prevVisit))}）から新しい動画はありません。それ以前の ${fresh.toLocaleString()} 本を出します`;
   moreNew();
 }
+
+const dividerHTML = () => `<div class="new-divider"><span>${sinceCount ? '前回見たところ' : '前回より前'}</span></div>`;
 
 function moreNew() {
   const next = newList.slice(newShown, newShown + NEW_PAGE);
   if (!next.length) return;
-  $('#hp-new-grid').insertAdjacentHTML('beforeend', next.map(thumbCard).join(''));
+  let html = '';
+  next.forEach((v, i) => {
+    // 「前回から」と「それ以前」の区切り（前回から新しい動画があるときだけ。先頭には入れない）
+    if (!dividerDone && v.seenAt <= prevVisit) { if (newShown + i > 0) html += dividerHTML(); dividerDone = true; }
+    html += thumbCard(v);
+  });
+  $('#hp-new-grid').insertAdjacentHTML('beforeend', html);
   newShown += next.length;
+}
+
+// ───────────── 続き（見返す・たどる） ─────────────
+
+function buildCont() {
+  const parts = [];
+  const hist = recentKeys().map((k) => state.byKey.get(k)).filter(Boolean);
+  const favs = favKeys().map((k) => state.byKey.get(k)).filter(Boolean);
+  // 続きを見る: 最後に見た 1 本を大きく
+  if (hist[0]) {
+    const v = hist[0];
+    parts.push(`<section class="cont-hero"><button class="card" data-key="${esc(v.key)}" data-hero="1">
+      <div class="thumb">${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(v.studio || v.title.slice(0, 12))}</div>`}
+        <span class="cont-play">▶ 続きを見る</span></div>
+      <div class="title">${esc(v.title)}</div>${v.studio ? `<div class="sub">${esc(v.studio)}</div>` : ''}</button></section>`);
+  }
+  parts.push(rowHTML('最近見た動画', hist.slice(1, ROW + 1), { act: 'history' }));
+  parts.push(rowHTML('お気に入りの動画', favs.slice(0, ROW), { act: 'favs', sub: `${favs.length.toLocaleString()} 本` }));
+  // たどる: 最近見た動画のスタジオの、ほかの動画（見た動画は除く）
+  const seen = new Set(hist.map((v) => v.key));
+  const studios = [];
+  for (const v of hist.slice(0, 12)) if (v.studioKey && !studios.some((s) => s.key === v.studioKey)) studios.push({ key: v.studioKey, name: v.studio });
+  for (const s of studios.slice(0, 3)) {
+    const items = latestOfStudio(s.key, ROW * 2).filter((x) => !seen.has(x.key)).slice(0, ROW);
+    parts.push(rowHTML(`${s.name} のほかの動画`, items, { act: `studio:${s.key}`, sub: '最近見たスタジオ' }));
+  }
+  const html = parts.filter(Boolean).join('');
+  $('#hp-cont').innerHTML = html || '<div class="state">まだ見た動画がありません。動画を再生したりお気に入りにすると、ここに並びます</div>';
+  rowVideos.clear();
+  for (const sec of $('#hp-cont').querySelectorAll('[data-row]')) {
+    const keys = [...sec.querySelectorAll('.card')].map((c) => c.dataset.key);
+    rowVideos.set(sec, keys.map((k) => state.byKey.get(k)).filter(Boolean));
+  }
 }
 
 // ───────────── 出演者 ─────────────
@@ -188,7 +274,7 @@ function showPanel(next, { animate = '' } = {}) {
   const prev = panel;
   scrollAt[prev] = window.scrollY;
   panel = next;
-  try { localStorage.setItem(PANEL_KEY, panel); } catch { /* 保存できなくても動く */ }
+  trackView(`home:${panel}`);
   for (const p of PANELS) {
     const el = $(`#hp-${p}-wrap`);
     el.classList.toggle('hidden', p !== panel);
@@ -205,7 +291,8 @@ function showPanel(next, { animate = '' } = {}) {
 }
 
 function render() {
-  if (panel === 'rec') buildRec();
+  if (panel === 'cont') buildCont();
+  else if (panel === 'rec') buildRec();
   else if (panel === 'new') buildNew();
   else if (panel === 'studios') openStudios();
   else if (panel === 'actors') buildActors();
@@ -214,7 +301,7 @@ function render() {
 /** タブバーのホームをもう一度押したとき: 先頭へ。先頭にいればおすすめへ */
 export function homeToTop() {
   if (window.scrollY > 60) return window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (panel !== 'rec') showPanel('rec');
+  if (panel !== 'new') showPanel('new');
 }
 
 function swipeTo(dir) {
@@ -225,7 +312,7 @@ function swipeTo(dir) {
 
 function init() {
   built = true;
-  panel = loadPanel();
+  panel = 'new'; // 起動したらまず新着（前回の続きのパネルは覚えない）
   $('#home-tabs').onclick = (e) => {
     const b = e.target.closest('button');
     if (!b || b.dataset.p === panel) return;
@@ -249,12 +336,19 @@ function init() {
 
   // カード・行の操作
   root.addEventListener('click', (e) => {
+    const q = e.target.closest('[data-qfav]');
+    if (q) { // 開かずにお気に入りを付け外し
+      e.stopPropagation();
+      const v = state.byKey.get(q.dataset.qfav);
+      if (v) toggleFav(v).then((on) => { paintQfav(q.dataset.qfav); toast(on ? 'お気に入りに追加しました' : 'お気に入りから外しました'); }).catch(() => {});
+      return;
+    }
     const card = e.target.closest('.card');
     if (card && card.dataset.key && !card.closest('#hp-studios')) {
       const v = state.byKey.get(card.dataset.key);
       const sec = card.closest('[data-row]');
       const list = sec ? rowVideos.get(sec) : (card.closest('#hp-new-grid') ? newList : [v]);
-      return openDetail(v, { list, index: Math.max(0, list.indexOf(v)) });
+      return openDetail(v, { list, index: Math.max(0, list.indexOf(v)), src: card.dataset.hero ? 'home:cont-hero' : undefined });
     }
     const act = e.target.closest('[data-act]');
     if (act) return onAct(act.dataset.act);
@@ -264,7 +358,8 @@ function init() {
   new IntersectionObserver((es) => { if (es[0].isIntersecting && isHomeOpen() && panel === 'new') moreNew(); }, { rootMargin: '600px' }).observe($('#hp-new-sentinel'));
   on('data', () => { if (isHomeOpen() && panel === 'rec' && window.scrollY < 200) buildRec(); });
   on('favactors', () => { if (isHomeOpen() && panel === 'actors') buildActors(); });
-  on('history', () => { if (isHomeOpen() && panel === 'rec' && window.scrollY < 200) buildRec(); });
+  on('history', () => { if (isHomeOpen() && panel === 'rec' && window.scrollY < 200) buildRec(); if (isHomeOpen() && panel === 'cont' && window.scrollY < 200) buildCont(); });
+  on('favs', () => { for (const el of document.querySelectorAll('#view-home [data-qfav]')) paintQfav(el.dataset.qfav, el); if (isHomeOpen() && panel === 'cont' && window.scrollY < 200) buildCont(); });
 }
 
 // 「すべて ›」などの動き
@@ -272,6 +367,10 @@ function onAct(act) {
   const goto = (hash) => { history.replaceState(history.state, '', `${location.pathname}${location.search}${hash}`); dispatchEvent(new HashChangeEvent('hashchange')); dispatchEvent(new Event('viewchange')); };
   if (act === 'history') {
     filters.view = 'history'; filters.studio = ''; filters.q = ''; filters.actor = '';
+    saveFilters(); renderChips(); return goto('');
+  }
+  if (act === 'favs') {
+    filters.view = 'fav'; filters.studio = ''; filters.q = ''; filters.actor = '';
     saveFilters(); renderChips(); return goto('');
   }
   if (act === 'actors-all') { try { localStorage.setItem('searchSeg', 'actors'); } catch { /* 無視 */ } return goto('#search'); }

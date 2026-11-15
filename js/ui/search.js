@@ -14,6 +14,7 @@ import { filters, saveFilters, renderChips, normalizeQuery, searchVideos } from 
 import { mountStudioPicker } from './filters.js';
 import { mountActorList } from './actors.js';
 import { openDetail } from './detail.js';
+import { track } from '../analytics.js';
 
 const SEGS = ['studios', 'actors', 'videos'];
 const SEG_KEY = 'searchSeg';
@@ -112,8 +113,17 @@ function paintVideos() {
   more.textContent = `${videoResults.length.toLocaleString()} 件すべて見る ›`;
 }
 
+let searchTimer = 0;
+function noteSearch() {
+  clearTimeout(searchTimer);
+  const q = query();
+  if (!q) return;
+  searchTimer = setTimeout(() => track('search', { len: q.length, n: seg === 'videos' ? videoResults.length : -1, at: `search:${seg}` }), 1200);
+}
+
 function paint() {
   showSeg();
+  noteSearch();
   if (seg === 'studios') paintStudios();
   else if (seg === 'actors') paintActors();
   else paintVideos();
