@@ -7,7 +7,7 @@
 // 出演者のお気に入りは localStorage の vfFavActors（{ 出演者 id: 表示名 }）。スタジオのお気に入りと同じ作り。
 //
 // 注意: 取れるのは otokoki が公開している情報だけ。顔写真ではなく、出演作のアイキャッチ画像を「代表画像」として使う
-// （公式サイトの写真は、各サイトの規約が転載を禁じているため使わない。気に入った写真は出演者のページから自分で登録できる）。
+// 公式サイトの写真は、アプリ版が端末の中だけで読み取ったものを使う（下の officialPhotoOf。リポジトリ・サーバーには置かない）。気に入った写真は出演者のページから自分で登録もできる。
 
 import * as db from './db.js';
 import { wpGet } from './wp.js';
@@ -275,8 +275,32 @@ export async function setCustom(id, patch) {
   return row;
 }
 
-/** 表示する写真: 自分で登録したものを優先 */
-export const photoOf = (a) => (a.custom && a.custom.photo) || (a.profile && a.profile.photo) || null;
+// 公式サイトの写真（アプリ版だけ）。iOS アプリが、端末の中で公式サイトの出演者一覧を読み取って、
+// この端末の localStorage の vfOfficialPhotos（{ at, photos: { 照合キー: 画像の URL } }）に置く（ios の BrowserModel+Photos.swift）。
+// サーバー・リポジトリには置かない（各サイトの規約のため、端末の中だけで使う）。照合キーは NFKC・小文字・空白なしの名前。
+const normName = (s) => String(s || '').normalize('NFKC').toLowerCase().replace(/\s+/g, '');
+let official = null; // 照合キー -> 画像の URL
+function loadOfficial() {
+  try {
+    const o = JSON.parse(localStorage.getItem('vfOfficialPhotos') || 'null');
+    official = new Map(o && o.photos ? Object.entries(o.photos) : []);
+  } catch { official = new Map(); }
+}
+addEventListener('vfPhotosChanged', () => { official = null; emit('actors'); });
+
+/** 公式サイトの写真（なければ null）。3 文字以上の名前（別名を含む）が一致したときだけ */
+export function officialPhotoOf(a) {
+  if (!official) loadOfficial();
+  if (!official.size) return null;
+  for (const n of [a.display, ...(a.aliases || [])]) {
+    const k = normName(n);
+    if (k.length >= 3 && official.has(k)) return official.get(k);
+  }
+  return null;
+}
+
+/** 表示する写真: 自分で登録したもの → 公式サイトの写真 → 出演作のサムネイル */
+export const photoOf = (a) => (a.custom && a.custom.photo) || officialPhotoOf(a) || (a.profile && a.profile.photo) || null;
 
 // ───────────── お気に入り ─────────────
 

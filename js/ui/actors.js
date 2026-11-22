@@ -242,6 +242,8 @@ function initActors() {
     renderActorList();
   };
   on('actors', () => { if (location.hash !== '#actors') dirty = true; });
+  // 公式サイトの写真が届いたら（アプリ版）、いま見ている一覧を描き直す
+  addEventListener('vfPhotosChanged', () => { if (location.hash === '#actors') renderActorList(); else dirty = true; });
   tags = [];
   loadTagList().then((rows) => { tags = rows; if (location.hash === '#actors') renderActorChips(); }).catch(() => {});
   // 選んでいたタグがあれば、その出演者を取り直す

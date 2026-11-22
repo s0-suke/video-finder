@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.18.3';
+export const VERSION = '1.18.4';
 
 export const CHANGELOG = [
+  {
+    version: '1.18.4',
+    date: '2026-11-23',
+    items: [
+      '出演者の写真: アプリ版では、KO-TUBE の出演者一覧から読み取った公式の写真を使うようにした（名前が一致した人だけ。端末の中だけで読み取り、1 週間に 1 回更新）。一致しない人は、これまでどおり出演作のサムネイル。自分で設定した写真が最優先',
+    ],
+  },
   {
     version: '1.18.3',
     date: '2026-11-23',
