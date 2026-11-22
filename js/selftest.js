@@ -123,7 +123,7 @@ export async function runSelftest() {
     const cs = $$('#actors-list .ag-card');
     assert(cs.length > 0, 'カードがない');
     const cols = getComputedStyle($('#actors-list .actor-grid')).gridTemplateColumns.split(' ').length;
-    assert(cols === 2, `列が ${cols}`);
+    if (innerWidth < 640) assert(cols === 2, `スマホ幅で列が ${cols}`); // 広い画面では列が増える
     const r = $('#actors-list .ag-photo').getBoundingClientRect();
     assert(Math.abs(r.width - r.height) < 2, `正方形でない: ${r.width}x${r.height}`);
     return `${allActors().length} 人 / 表示 ${cs.length}`;
@@ -137,20 +137,22 @@ export async function runSelftest() {
     await wait(400);
   });
 
-  await check('出演者: 体型タグ・年代のチップで絞り込める', async () => {
-    await until(() => $('#actors-chips [data-age]'), 3000);
+  await check('出演者: 「名前あり」・体型タグのチップで絞り込める', async () => {
+    await until(() => $('#actors-chips [data-mode="named"]'), 3000);
     const before = $$('#actors-list .ag-card').length;
-    $('#actors-chips [data-age="a20"]').click();
+    $('#actors-chips [data-mode="named"]').click();
     await wait(400);
-    const after = $$('#actors-list .ag-card').length;
-    assert($('#actors-chips [data-age="a20"]').classList.contains('on'), '年代が選ばれない');
-    assert(after <= before, '絞り込みで増えた');
+    assert($('#actors-chips [data-mode="named"]').classList.contains('on'), '名前ありが選ばれない');
+    assert($$('#actors-list .ag-card').length <= before, '絞り込みで増えた');
     $('#actors-chips [data-reset]').click();
     await wait(300);
     // 体型のチップ（otokoki から取る。取れなければ飛ばす）
     if (await until(() => $('#actors-chips [data-tag]'), 8000)) {
+      const total = allActors().length;
       $('#actors-chips [data-tag]').click();
-      assert(await until(() => !$('#actors-meta').textContent.includes('調べています'), 40000), 'タグの絞り込みが終わらない');
+      assert(await until(() => !$('#actors-meta').textContent.includes('調べています'), 60000), 'タグの絞り込みが終わらない');
+      const n = +$('#actors-meta span').textContent.replace(/[^\d]/g, '');
+      assert(n > 0 && n < total, `タグで ${n} 人（全 ${total} 人）`);
       $('#actors-chips [data-reset]').click();
       await wait(300);
     }

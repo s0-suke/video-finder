@@ -5,7 +5,7 @@
 //   検索欄: 動画のタイトル・品番・タグ・スタジオ名
 // 条件は端末に覚える（検索語は覚えない）。一番上で下に引っ張ると新着を取りに行く。
 
-import { $, esc, toast } from '../util.js';
+import { $, esc, toast, debounce } from '../util.js';
 import { state, on, isNew } from '../data.js';
 import { crawl, collect } from '../crawler.js';
 import { descendantKeys } from '../studios.js';
@@ -224,10 +224,11 @@ function init() {
   });
 
   // データが増えたら、先頭付近を見ているときだけ作り直す（読み進めている途中で入れ替わらないように）
-  on('data', () => {
+  const onData = debounce(() => {
     if (location.hash !== '#home') { dirty = true; return; }
     if (window.scrollY < 300 && !isSheetOpen()) render({ keepScroll: true }); else renderChips();
   });
+  on('data', () => { if (location.hash !== '#home') dirty = true; else onData(); });
   on('favstudios', () => { if (filters.view === 'fav') dirty = true; if (location.hash === '#home') renderMeta(feed.list().length); });
 }
 

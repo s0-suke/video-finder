@@ -4,7 +4,7 @@
 // - 選んでいるタブをもう一度押すと先頭へ（出演者の詳細にいるなら、そのタブの最初のページへ。ホームは先頭にいれば新着へ）
 // タブの切り替えは履歴に積まない（戻る操作でページを往復しないように）。描画は hashchange の route に任せる。
 
-import { $, $$ } from '../util.js';
+import { $, $$, debounce } from '../util.js';
 import { state, on, isNew } from '../data.js';
 import { actorFrom } from './actors.js';
 import { homeToTop } from './home.js';
@@ -57,6 +57,6 @@ export function initTabbar() {
     switchHash(`#${tab}`);
   };
   addEventListener('hashchange', renderTabs);
-  on('data', renderTabs);
+  on('data', debounce(renderTabs, 500)); // 収集のたびに、数千本を数え直さない
   renderTabs();
 }

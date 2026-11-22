@@ -1,6 +1,6 @@
 // 出演者の画面
 //
-// - 出演者タブ（#actors）: 正方形の写真を 2 列に並べたグリッド。名前・特徴での検索、体型タグ・年代・お気に入りでの絞り込み、並び順
+// - 出演者タブ（#actors）: 正方形の写真を 2 列に並べたグリッド。名前・特徴での検索、体型・特徴タグ・名前あり・お気に入りでの絞り込み、並び順
 // - mountActorGrid: そのグリッドの部品（お気に入りのタブの「出演者」でも使う）
 // - 詳細ページ（#actor/<id>）: 写真・別名・身長/体重/年齢・タグ・出演作
 // - 写真は、一覧に出てきたカードから少しずつ取る（actors.js の enrich。出演作のアイキャッチ画像）。自分で登録した写真が優先
@@ -163,13 +163,9 @@ export function mountActorGrid(container) {
 
 // ───────────── 出演者タブ（#actors） ─────────────
 
-const AGES = [
-  { id: 'a20', label: '〜20代', test: (n) => n < 30 },
-  { id: 'a30', label: '30代', test: (n) => n >= 30 && n < 40 },
-  { id: 'a40', label: '40代〜', test: (n) => n >= 40 },
-];
 const AF_KEY = 'actorFilters';
-const af = (() => { try { return { mode: 'all', tag: 0, age: '', sort: 'count', ...JSON.parse(localStorage.getItem(AF_KEY) || '{}') }; } catch { return { mode: 'all', tag: 0, age: '', sort: 'count' }; } })();
+const af = (() => { try { return { mode: 'all', tag: 0, sort: 'count', ...JSON.parse(localStorage.getItem(AF_KEY) || '{}') }; } catch { return { mode: 'all', tag: 0, sort: 'count' }; } })();
+if (!['all', 'fav', 'named'].includes(af.mode)) af.mode = 'all';
 af.q = '';
 const saveAf = () => { try { const { q, ...rest } = af; localStorage.setItem(AF_KEY, JSON.stringify(rest)); } catch { /* 保存できなくても動く */ } };
 
@@ -182,7 +178,7 @@ let dirty = true;
 function computeActors() {
   let r = searchActors(af.q, { minCount: 1 });
   if (af.mode === 'fav') r = r.filter((a) => isFavActor(a.id));
-  if (af.age) { const t = AGES.find((x) => x.id === af.age); r = r.filter((a) => { const n = ageOf(a); return n && t.test(n); }); }
+  if (af.mode === 'named') r = r.filter((a) => !a.anonymous); // 「172cm60kg20歳」のような名前のない出演者を除く
   if (af.tag && tagSet) r = r.filter((a) => tagSet.has(a.id));
   if (af.sort === 'name') r = [...r].sort((a, b) => a.display.localeCompare(b.display, 'ja'));
   return r;
@@ -191,10 +187,10 @@ function computeActors() {
 function renderActorChips() {
   const chip = (f, attrs, label) => `<button class="chip ${f ? 'on' : ''}" ${attrs}>${label}</button>`;
   $('#actors-chips').innerHTML =
-    chip(!af.mode.startsWith('fav') && !af.tag && !af.age, 'data-reset', 'すべて') +
+    chip(af.mode === 'all' && !af.tag, 'data-reset', 'すべて') +
     chip(af.mode === 'fav', 'data-mode="fav"', '♥ お気に入り') +
-    tags.map((t) => chip(af.tag === t.id, `data-tag="${t.id}"`, esc(t.name))).join('') +
-    AGES.map((t) => chip(af.age === t.id, `data-age="${t.id}"`, t.label)).join('');
+    chip(af.mode === 'named', 'data-mode="named"', '名前あり') +
+    tags.map((t) => chip(af.tag === t.id, `data-tag="${t.id}"`, esc(t.name))).join('');
   const on = $('#actors-chips .chip.on:not([data-reset])');
   if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
@@ -206,9 +202,7 @@ function renderActorList() {
   renderActorChips();
   $('#actors-meta').innerHTML = `<span>${loadingTag ? '調べています…' : `${rows.length.toLocaleString()} 人`}</span>` +
     `<button class="cond" data-sort>並び順: ${af.sort === 'name' ? '名前順' : '作品数順'}</button>`;
-  actorsGrid.setRows(loadingTag ? [] : rows, allActors().length
-    ? (af.mode === 'fav' ? 'お気に入りの出演者はまだいません。出演者の ♡ を押すと追加されます' : '見つかりません')
-    : '出演者を取得しています…');
+  actorsGrid.setRows(loadingTag ? [] : rows, !allActors().length ? '' : af.mode === 'fav' ? 'お気に入りの出演者はまだいません。出演者の ♡ を押すと追加されます' : '見つかりません');
 }
 
 async function pickTag(id) {
@@ -236,9 +230,8 @@ function initActors() {
   $('#actors-chips').onclick = (e) => {
     const b = e.target.closest('.chip');
     if (!b) return;
-    if (b.dataset.reset !== undefined) { Object.assign(af, { mode: 'all', tag: 0, age: '' }); tagSet = null; tagBusy++; saveAf(); return renderActorList(); }
+    if (b.dataset.reset !== undefined) { Object.assign(af, { mode: 'all', tag: 0 }); tagSet = null; tagBusy++; saveAf(); return renderActorList(); }
     if (b.dataset.mode) { af.mode = af.mode === b.dataset.mode ? 'all' : b.dataset.mode; saveAf(); return renderActorList(); }
-    if (b.dataset.age) { af.age = af.age === b.dataset.age ? '' : b.dataset.age; saveAf(); return renderActorList(); }
     if (b.dataset.tag) pickTag(+b.dataset.tag);
   };
   $('#actors-meta').onclick = (e) => {

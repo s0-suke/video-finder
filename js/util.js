@@ -45,3 +45,9 @@ export function bindThumbFallback(root) {
     img.replaceWith(ph);
   }, true);
 }
+
+/** 続けて呼ばれても、最後の呼び出しから ms たってから 1 回だけ実行する（収集のたびに一覧を作り直さないため） */
+export function debounce(fn, ms = 600) {
+  let t = 0;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
