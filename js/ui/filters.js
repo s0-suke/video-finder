@@ -34,7 +34,7 @@ export function openFilters(f, onApply) {
         ${enabled.map((s) => `<option value="${s.id}" ${String(f.site) === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
       </select>
     </div>
-    <div class="field switch"><span>サムネイルのない動画を隠す</span>
+    <div class="field switch"><span>サムネイルのない動画を隠す<span class="note" style="display:block;font-size:11px">はじめはオン。オフにするとサムネのない動画も出ます</span></span>
       <button class="toggle ${f.hideNoThumb ? 'on' : ''}" id="f-nothumb" aria-label="サムネイルのない動画を隠す"></button>
     </div>
     <div class="btn-row">
@@ -47,7 +47,7 @@ export function openFilters(f, onApply) {
   const seg = (id, set) => { $(id).onclick = (e) => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); for (const x of $(id).children) x.classList.toggle('on', x === b); }; };
   seg('#f-dateby', (v) => { dateBy = v; });
   seg('#f-sort', (v) => { sort = v; });
-  $('#f-reset').onclick = () => { closeSheet(); onApply({ sort: 'new', dateBy: 'post', studio: '', site: '', hideNoThumb: false }); };
+  $('#f-reset').onclick = () => { closeSheet(); onApply({ sort: 'new', dateBy: 'post', studio: '', site: '', hideNoThumb: true }); };
   $('#f-apply').onclick = () => { closeSheet(); onApply({ sort, dateBy, hideNoThumb, studio: $('#f-studio').value, site: $('#f-site').value }); };
 }
 

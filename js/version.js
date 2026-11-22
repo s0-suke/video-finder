@@ -6,9 +6,19 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.19.1';
+export const VERSION = '1.20.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.20.0',
+    date: '2026-11-23',
+    items: [
+      'ホーム: 「新着」のチップをなくし、はじめから「すべて」を新しい順に出すようにした（新着の動画には NEW の印）',
+      'ホーム: サムネイルのない動画は、はじめから隠すようにした（絞り込みシートでオフにすると出る）',
+      '動画の一覧（ホーム・履歴・お気に入り）に、1 列 / 2 列の表示を切り替えるボタンを追加した（検索欄の右）',
+      '出演者: 2 列ではなく 3 列のグリッドにした',
+    ],
+  },
   {
     version: '1.19.1',
     date: '2026-11-23',

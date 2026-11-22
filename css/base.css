@@ -331,19 +331,19 @@ header.top .top-search { padding-bottom: 8px; }
 .qfav:active { transform: scale(.9); }
 
 /* 出演者: 正方形の写真を 2 列 */
-.actor-grid { display: grid; gap: 14px 10px; padding: 10px 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (min-width: 640px) { .actor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (min-width: 960px) { .actor-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.actor-grid { display: grid; gap: 12px 8px; padding: 10px 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 640px) { .actor-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .actor-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
 .ag-card { cursor: pointer; min-width: 0; -webkit-user-select: none; user-select: none; }
 .ag-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
 .ag-photo { position: relative; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, #2a2540, #1c1c22); display: grid; place-items: center; transition: transform .15s; }
 .ag-card:active .ag-photo { transform: scale(.97); }
 .ag-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
-.ag-photo .av-ph { font-size: 44px; }
-.ag-photo .heart-btn { position: absolute; right: 2px; top: 2px; z-index: 1; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.ag-photo .av-ph { font-size: 34px; }
+.ag-photo .heart-btn { position: absolute; right: 0; top: 0; z-index: 1; width: 40px; height: 40px; font-size: 20px; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
 .ag-photo .heart-btn.on { color: #ff5a7a; }
-.ag-name { margin-top: 6px; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ag-sub { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-name { margin-top: 5px; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-sub { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 代表画像（丸。出演者の詳細） */
 .av { flex: none; width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #2a2540, #1c1c22); display: grid; place-items: center; position: relative; }
@@ -378,3 +378,11 @@ header.top .seg button, #favs-seg button { height: 40px; }
 .ap-tags .dt-chip small { opacity: .7; }
 /* 履歴の中では「視聴済み」は要らない */
 #history-grid .watched { display: none; }
+
+/* 動画の一覧の 1 列表示（右上のボタンで切り替え。ui/layout.js） */
+html.cols-1 .grid { grid-template-columns: minmax(0, 1fr); }
+html.cols-1 .card .title { font-size: 15px; }
+.cols-toggle .ic-one { display: none; }
+html.cols-1 .cols-toggle .ic-one { display: block; }
+html.cols-1 .cols-toggle .ic-two { display: none; }
+.cols-toggle[aria-pressed="true"] { color: var(--accent); }

@@ -1,8 +1,8 @@
-// ホーム（#home）: 動画の一覧。新着がはじめの表示で、チップ・絞り込み・検索で自分の興味のある動画だけにできる
+// ホーム（#home）: 動画の一覧。すべての動画を新しい順に並べる（新着には NEW の印）。チップ・絞り込み・検索で自分の興味のある動画だけにできる
 //
-//   チップ: 新着 / すべて / ★お気に入りスタジオ / 上位のスタジオ… / スタジオ一覧…
-//   絞り込みシート: 日付の基準・並び順・スタジオ・取得元サイト・サムネなし
-//   検索欄: 動画のタイトル・品番・タグ・スタジオ名
+//   チップ: すべて / ★お気に入りスタジオ / 上位のスタジオ… / スタジオ一覧…
+//   絞り込みシート: 日付の基準・並び順・スタジオ・取得元サイト・サムネなし（サムネのない動画は、はじめは隠す）
+//   検索欄: 動画のタイトル・品番・タグ・スタジオ名。右のボタンで 1 列 / 2 列の表示を切り替える（ui/layout.js）
 // 条件は端末に覚える（検索語は覚えない）。一番上で下に引っ張ると新着を取りに行く。
 
 import { $, esc, toast, debounce } from '../util.js';
@@ -16,13 +16,13 @@ import { openFilters, openStudioPicker } from './filters.js';
 import { isSheetOpen } from './sheet.js';
 
 const CHIP_STUDIOS = 12;
-const KEY = 'homeFilters';
-const DEFAULTS = { view: 'new', studio: '', site: '', sort: 'new', dateBy: 'post', hideNoThumb: false };
+const KEY = 'homeFilters2';
+const DEFAULTS = { view: 'all', studio: '', site: '', sort: 'new', dateBy: 'post', hideNoThumb: true };
 
 const saved = (() => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch { return {}; } })();
-// view: 'new' = 新着 / 'all' = すべて / 'fav' = お気に入りのスタジオ
+// view: 'all' = すべて / 'fav' = お気に入りのスタジオ
 export const filters = { ...DEFAULTS, ...saved, q: '' };
-if (!['new', 'all', 'fav'].includes(filters.view)) filters.view = 'new';
+if (!['all', 'fav'].includes(filters.view)) filters.view = 'all';
 
 let feed = null;
 let search = null;
@@ -49,7 +49,6 @@ function compute() {
     for (const k of favStudioKeys()) for (const x of descendantKeys(state.studios, k)) favSet.add(x);
   }
   let out = state.videos.filter((v) =>
-    (filters.view !== 'new' || isNew(v)) &&
     (!favSet || favSet.has(v.studioKey)) &&
     (!studioSet || studioSet.has(v.studioKey)) &&
     (!siteId || v.siteIds.has(siteId)) &&
@@ -63,15 +62,11 @@ function compute() {
     const known = out.filter((v) => v.release).sort((a, b) => (a.release < b.release ? 1 : a.release > b.release ? -1 : 0));
     if (filters.sort === 'old') known.reverse();
     out = [...known, ...out.filter((v) => !v.release)];
-  } else if (filters.view === 'new' && filters.sort === 'new') {
-    out.sort((a, b) => b.seenAt - a.seenAt); // 新着は、見つかった順
   } else if (filters.sort === 'old') out.reverse(); // state.videos は掲載日の新しい順
   return out;
 }
 
 // ───────────── 表示 ─────────────
-
-const newCount = () => { let n = 0; for (const v of state.videos) if (isNew(v)) n++; return n; };
 
 function renderChips() {
   const roots = state.studios.filter((s) => !s.parent);
@@ -82,14 +77,12 @@ function renderChips() {
     if (cur) top.unshift(cur);
   }
   const chip = (on, attrs, label) => `<button class="chip ${on ? 'on' : ''}" ${attrs}>${label}</button>`;
-  const n = newCount();
   $('#home-chips').innerHTML =
-    chip(filters.view === 'new', 'data-view="new"', `新着${n ? ` <span class="count">${n > 99 ? '99+' : n}</span>` : ''}`) +
     chip(filters.view === 'all' && !filters.studio, 'data-all', 'すべて') +
     chip(filters.view === 'fav', 'data-view="fav"', '★ お気に入りスタジオ') +
     top.map((s) => chip(filters.studio === s.key, `data-studio="${esc(s.key)}"`, esc(s.name))).join('') +
     (state.studios.length ? '<button class="chip more" data-more>スタジオ一覧…</button>' : '');
-  $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new' || filters.dateBy !== 'post' || filters.hideNoThumb));
+  $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new' || filters.dateBy !== 'post' || !filters.hideNoThumb));
   const on = $('#home-chips .chip.on:not([data-view])');
   if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
 }
@@ -101,7 +94,7 @@ function conditions() {
   if (filters.sort === 'old') c.push({ id: 'sort', label: '古い順' });
   if (filters.sort === 'random') c.push({ id: 'sort', label: 'ランダム' });
   if (filters.site) c.push({ id: 'site', label: (state.sites.find((s) => String(s.id) === String(filters.site)) || {}).name || 'サイト' });
-  if (filters.hideNoThumb) c.push({ id: 'hideNoThumb', label: 'サムネなし除外' });
+  if (!filters.hideNoThumb) c.push({ id: 'hideNoThumb', label: 'サムネなしも表示' });
   if (filters.studio) c.push({ id: 'studio', label: (state.studios.find((x) => x.key === filters.studio) || {}).name || 'スタジオ' });
   return c;
 }
@@ -117,10 +110,9 @@ function renderMeta(count) {
 const emptyText = () => {
   if (!state.posts.size) return crawl.running ? '収集中です。少し待つと表示されます…' : 'まだデータがありません。設定から収集してください';
   if (filters.view === 'fav' && !favStudioKeys().length) return 'お気に入りのスタジオがありません。「スタジオ一覧…」の ☆ で追加できます';
-  if (filters.q || filters.studio || filters.site || filters.hideNoThumb) {
+  if (filters.q || filters.studio || filters.site || filters.view !== 'all' || !filters.hideNoThumb) {
     return '該当する動画がありません<div class="btn-row" style="justify-content:center"><button class="btn" data-clear="all">すべての条件を外す</button></div>';
   }
-  if (filters.view === 'new') return '新着はありません（3 日以内に見つかった動画がここに並びます）<div class="btn-row" style="justify-content:center"><button class="btn" data-view="all">すべての動画を見る</button></div>';
   return '該当する動画がありません';
 };
 
@@ -141,7 +133,7 @@ const commit = () => { save(); trackView(`home:${filters.view}`); render(); };
 
 /** ホームを、検索語・スタジオを指定して開く（詳細のタグ・スタジオから）。タブの切り替えは main.js のハッシュで行う */
 export function showHome({ q = '', studio = '' } = {}) {
-  Object.assign(filters, { view: 'all', studio, site: '', hideNoThumb: false, sort: 'new', dateBy: 'post' });
+  Object.assign(filters, { view: 'all', studio, site: '', hideNoThumb: true, sort: 'new', dateBy: 'post' });
   save();
   filters.q = q;
   if (search) search.put(q); // 描き直しは、ページを移したあとの route が 1 回だけ行う
@@ -150,18 +142,18 @@ export function showHome({ q = '', studio = '' } = {}) {
   dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
-/** タブバーのホームをもう一度押したとき: 先頭へ。先頭なら新着へ */
+/** タブバーのホームをもう一度押したとき: 先頭へ。先頭なら、絞り込みを外して「すべて」へ */
 export function homeToTop() {
   if (window.scrollY > 60) return window.scrollTo({ top: 0, behavior: 'smooth' });
-  if (filters.view !== 'new' || filters.studio || filters.q) {
-    Object.assign(filters, { view: 'new', studio: '' });
+  if (filters.view !== 'all' || filters.studio || filters.q) {
+    Object.assign(filters, { view: 'all', studio: '' });
     if (search) search.set(''); else filters.q = '';
     commit();
   }
 }
 
 function clearCondition(id) {
-  if (id === 'all') { Object.assign(filters, { studio: '', site: '', hideNoThumb: false }); if (search) search.set(''); else filters.q = ''; }
+  if (id === 'all') { Object.assign(filters, { view: 'all', studio: '', site: '', hideNoThumb: true }); if (search) search.set(''); else filters.q = ''; }
   else filters[id] = DEFAULTS[id];
   if (id === 'sort') shuffleSeed = String(Math.random());
   commit();

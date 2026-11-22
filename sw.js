@@ -51,6 +51,7 @@ const SHELL = [
   './js/studio-favs.js',
   './js/ui/actors.js',
   './js/ui/tabbar.js',
+  './js/ui/layout.js',
 ];
 
 self.addEventListener('install', (e) => {

@@ -15,6 +15,7 @@ import * as version from './version.js';
 import { initSheet, hide as hideSheet } from './ui/sheet.js';
 import { initSettings, openSettings } from './ui/settings.js';
 import { initTabbar, pageOf, switchHash, renderTabs } from './ui/tabbar.js';
+import { initLayout } from './ui/layout.js';
 import { openHome, filters } from './ui/home.js';
 import { openHistory } from './ui/history-view.js';
 import { openFavs, favSegment } from './ui/favs.js';
@@ -89,6 +90,7 @@ async function boot() {
   initSheet();
   initSettings();
   initTabbar();
+  initLayout();
   initActorPage({ onBack: () => switchHash(actorFrom && pageOf(actorFrom) !== 'actor' ? actorFrom : '#actors') });
   on('progress', () => {
     $('#progress').classList.toggle('on', crawl.running);

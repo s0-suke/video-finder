@@ -62,16 +62,27 @@ export async function runSelftest() {
     return `${state.videos.length} 本 / カード ${n} 枚`;
   });
 
-  await check('ホーム: チップ（新着・すべて・お気に入り）で切り替えられる', async () => {
-    $('#home-chips [data-view="new"]').click();
-    await wait(300);
-    assert($('#home-chips [data-view="new"]').classList.contains('on'), '新着が選ばれない');
+  await check('ホーム: 新着のチップはなく、すべて・お気に入りスタジオで切り替えられる', async () => {
+    assert(!$('#home-chips [data-view="new"]'), '新着のチップが残っている');
+    assert($('#home-chips [data-all]').classList.contains('on'), 'はじめが「すべて」でない');
     $('#home-chips [data-view="fav"]').click();
     await wait(300);
     assert($('#home-chips [data-view="fav"]').classList.contains('on'), 'お気に入りが選ばれない');
     $('#home-chips [data-all]').click();
     await wait(300);
     assert(cards('#home-grid') > 0, 'すべてで 0 件');
+  });
+
+  await check('ホーム: サムネのない動画を隠すのがはじめの状態で、1 列 / 2 列を切り替えられる', async () => {
+    assert(filters.hideNoThumb === true, 'サムネなし除外が初期値でない');
+    const two = getComputedStyle($('#home-grid')).gridTemplateColumns.split(' ').length;
+    $('#view-home [data-cols-toggle]').click();
+    await wait(200);
+    const one = getComputedStyle($('#home-grid')).gridTemplateColumns.split(' ').length;
+    $('#view-home [data-cols-toggle]').click();
+    await wait(200);
+    assert(one === 1, `1 列にならない（${one}）`);
+    assert(getComputedStyle($('#home-grid')).gridTemplateColumns.split(' ').length === two, '元の列数に戻らない');
   });
 
   await check('ホーム: 検索で絞り込める（品番のハイフンなしでも当たる）', async () => {
@@ -137,14 +148,14 @@ export async function runSelftest() {
     await until(() => !isSheetOpen(), 3000);
   });
 
-  await check('出演者: 2 列の正方形グリッドで並ぶ', async () => {
+  await check('出演者: 3 列の正方形グリッドで並ぶ', async () => {
     await tab('actors');
     assert(visible('#view-actors'), '出演者のページが出ない');
     await until(() => allActors().length > 0 && $$('#actors-list .ag-card').length > 0, 20000);
     const cs = $$('#actors-list .ag-card');
     assert(cs.length > 0, 'カードがない');
     const cols = getComputedStyle($('#actors-list .actor-grid')).gridTemplateColumns.split(' ').length;
-    if (innerWidth < 640) assert(cols === 2, `スマホ幅で列が ${cols}`); // 広い画面では列が増える
+    if (innerWidth < 640) assert(cols === 3, `スマホ幅で列が ${cols}`); // 広い画面では列が増える
     const r = $('#actors-list .ag-photo').getBoundingClientRect();
     assert(Math.abs(r.width - r.height) < 2, `正方形でない: ${r.width}x${r.height}`);
     return `${allActors().length} 人 / 表示 ${cs.length}`;
