@@ -9,13 +9,13 @@ import { mountActorGrid } from './actors.js';
 import { track } from '../analytics.js';
 
 const SEG_KEY = 'favSeg';
-let seg = 'videos';
+const loadSeg = () => { try { return localStorage.getItem(SEG_KEY) === 'actors' ? 'actors' : 'videos'; } catch { return 'videos'; } };
+let seg = loadSeg();
 let feed = null;
 let grid = null;
 let query = '';
 let dirty = true;
 
-const loadSeg = () => { try { return localStorage.getItem(SEG_KEY) === 'actors' ? 'actors' : 'videos'; } catch { return 'videos'; } };
 export const favSegment = () => seg;
 
 function render() {
@@ -43,7 +43,6 @@ function render() {
 }
 
 function init() {
-  seg = loadSeg();
   feed = createFeed({
     grid: $('#favs-grid'), sentinel: $('#favs-sentinel'), stateEl: $('#favs-state'),
     empty: () => (query ? '該当する動画がありません' : 'お気に入りの動画はまだありません。カードのハートか、動画の詳細の ♡ で追加できます'),

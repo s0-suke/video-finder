@@ -1,6 +1,6 @@
 // ホーム（#home）: 動画の一覧。新着がはじめの表示で、チップ・絞り込み・検索で自分の興味のある動画だけにできる
 //
-//   チップ: 新着 / すべて / ★お気に入り（お気に入りのスタジオ） / 上位のスタジオ… / スタジオ一覧…
+//   チップ: 新着 / すべて / ★お気に入りスタジオ / 上位のスタジオ… / スタジオ一覧…
 //   絞り込みシート: 日付の基準・並び順・スタジオ・取得元サイト・サムネなし
 //   検索欄: 動画のタイトル・品番・タグ・スタジオ名
 // 条件は端末に覚える（検索語は覚えない）。一番上で下に引っ張ると新着を取りに行く。
@@ -86,7 +86,7 @@ function renderChips() {
   $('#home-chips').innerHTML =
     chip(filters.view === 'new', 'data-view="new"', `新着${n ? ` <span class="count">${n > 99 ? '99+' : n}</span>` : ''}`) +
     chip(filters.view === 'all', 'data-view="all"', 'すべて') +
-    chip(filters.view === 'fav', 'data-view="fav"', '★ お気に入り') +
+    chip(filters.view === 'fav', 'data-view="fav"', '★ お気に入りスタジオ') +
     top.map((s) => chip(filters.studio === s.key, `data-studio="${esc(s.key)}"`, esc(s.name))).join('') +
     (state.studios.length ? '<button class="chip more" data-more>スタジオ一覧…</button>' : '');
   $('#filter-btn').classList.toggle('active', !!(filters.site || filters.sort !== 'new' || filters.dateBy !== 'post' || filters.hideNoThumb));
@@ -143,7 +143,8 @@ const commit = () => { save(); trackView(`home:${filters.view}`); render(); };
 export function showHome({ q = '', studio = '' } = {}) {
   Object.assign(filters, { view: 'all', studio, site: '', hideNoThumb: false, sort: 'new', dateBy: 'post' });
   save();
-  if (search) search.set(q); else filters.q = q;
+  filters.q = q;
+  if (search) search.put(q); // 描き直しは、ページを移したあとの route が 1 回だけ行う
   dirty = true;
   history.replaceState(history.state, '', `${location.pathname}${location.search}#home`);
   dispatchEvent(new HashChangeEvent('hashchange'));
@@ -229,7 +230,9 @@ function init() {
     if (window.scrollY < 300 && !isSheetOpen()) render({ keepScroll: true }); else renderChips();
   });
   on('data', () => { if (location.hash !== '#home') dirty = true; else onData(); });
-  on('favstudios', () => { if (filters.view === 'fav') dirty = true; if (location.hash === '#home') renderMeta(feed.list().length); });
+  let favDirty = false;
+  on('favstudios', () => { if (filters.view === 'fav') { dirty = true; favDirty = true; } if (location.hash === '#home') renderMeta(feed.list().length); });
+  on('sheetclose', () => { if (favDirty && location.hash === '#home') { favDirty = false; render({ keepScroll: true }); } });
 }
 
 /** ページを開いたとき（route から）。作ってあって変わっていなければ、そのまま見せる */

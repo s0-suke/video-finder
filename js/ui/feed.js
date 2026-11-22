@@ -2,29 +2,19 @@
 //
 // - createFeed: グリッドに、40 本ずつ無限スクロールでカードを並べる。タップで詳細（前後の移動はこの一覧の中）、
 //   カードのハートで開かずにお気に入り。サムネイルが読めなければ代わりの表示にする。
-// - videoMatcher: キーワード（タイトル・品番・タグ・スタジオ名。全角半角・大文字小文字・品番のハイフンは気にしない）に当たる動画の判定
+// - videoMatcher: キーワード（タイトル・品番・タグ・スタジオ名）に当たる動画の判定（list-core.js）
 // - bindSearch: タブ内の検索欄（日本語入力の変換中は絞らない）
 
-import { esc, fmtDate, toast, bindThumbFallback } from '../util.js';
+import { esc, toast, bindThumbFallback } from '../util.js';
 import { on, isNew } from '../data.js';
 import { isFav, toggleFav } from '../favorites.js';
 import { viewedAt } from '../history.js';
-import { normalizeCode } from '../matching.js';
+import { shortDate } from '../list-core.js';
 import { openDetail } from './detail.js';
 
+export { videoMatcher, normalizeQuery } from '../list-core.js';
+
 const PAGE = 40;
-
-// カード用の短い日付（今年なら「11/04」、それ以外は「2021/05/23」）
-const shortDate = (d) => (d && d.startsWith(String(new Date().getFullYear())) ? d.slice(5, 10).replace('-', '/') : fmtDate(d));
-
-export const normalizeQuery = (s) => String(s || '').normalize('NFKC').toLowerCase();
-
-/** キーワードに当たる動画かどうかを返す関数（キーワードが空なら常に true） */
-export function videoMatcher(q) {
-  const words = normalizeQuery(q).split(/\s+/).filter(Boolean);
-  if (!words.length) return () => true;
-  return (v) => words.every((w) => v.hay.includes(w) || (v.code && /\d/.test(w) && normalizeCode(v.code).toLowerCase().includes(w.replace(/-/g, ''))));
-}
 
 export function cardHTML(v, i, { dateBy = 'post' } = {}) {
   const fav = isFav(v.key);
@@ -127,5 +117,7 @@ export function bindSearch(input, clear, onQuery) {
   return {
     value: () => input.value.trim(),
     set(q) { input.value = q; sync(); onQuery(q); },
+    /** 欄の文字だけ合わせる（絞り込みは呼ばない） */
+    put(q) { input.value = q; sync(); },
   };
 }

@@ -14,7 +14,8 @@ import {
   syncIndex, loadTagList, actorsWithTag,
 } from '../actors.js';
 import { openDetail } from './detail.js';
-import { bindSearch } from './feed.js';
+import { bindSearch, cardHTML } from './feed.js';
+import { toggleFav } from '../favorites.js';
 import { showHome } from './home.js';
 
 const PAGE = 40;
@@ -310,7 +311,7 @@ export function renderActorPage(id) {
       </div>
       <div class="section-title">手元の出演作</div>
       ${p.full ? '' : '<div class="note" id="ap-loading">出演作を照合しています…</div>'}
-      <div class="grid" id="ap-grid">${vids.slice(0, PER_ROW_GRID).map((v, i) => workCardHTML(v, i)).join('')}</div>
+      <div class="grid" id="ap-grid">${vids.slice(0, PER_ROW_GRID).map((v, i) => cardHTML(v, i)).join('')}</div>
       ${p.full && !vids.length ? '<div class="state">手元の動画に、この人の出演作は見つかりませんでした。「名前で動画を探す」を試してください</div>' : ''}
       ${vids.length > PER_ROW_GRID ? `<div class="state"><small>先頭の ${PER_ROW_GRID} 本を表示（全 ${vids.length.toLocaleString()} 本）</small></div>` : ''}
     `;
@@ -323,16 +324,6 @@ export function renderActorPage(id) {
     const l = $('#ap-loading');
     if (l) l.textContent = '通信できませんでした。あとでもう一度開いてください';
   });
-}
-
-function workCardHTML(v, i) {
-  return `<button class="card" data-i="${i}">
-    <div class="thumb">
-      ${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(v.studio || v.title.slice(0, 12))}</div>`}
-      ${v.code ? `<span class="badge code">${esc(v.code)}</span>` : ''}
-    </div>
-    <div class="title">${esc(v.title)}</div>
-  </button>`;
 }
 
 /** 選んだ画像を 256px 四方（中央切り抜き）の JPEG にして data URL で返す */
@@ -360,6 +351,12 @@ export function initActorPage({ onBack }) {
     if (e.target.closest('[data-act="search-words"]')) {
       const a = getActor(+root.dataset.id);
       if (a) showHome({ q: a.aliases.find((x) => x.length >= 2) || a.display });
+      return;
+    }
+    const q = e.target.closest('[data-qfav]');
+    if (q) { // 開かずにお気に入りを付け外し
+      const v = root._vids && root._vids[+q.closest('.card').dataset.i];
+      if (v) toggleFav(v).then((added) => toast(added ? 'お気に入りに追加しました' : 'お気に入りから外しました')).catch(() => {});
       return;
     }
     const card = e.target.closest('.card');

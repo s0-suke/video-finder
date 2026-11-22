@@ -44,7 +44,21 @@ function route() {
   else if (page === 'favs') openFavs();
   else if (page === 'actor') renderActorPage(actorIdFromHash());
   // 別のページから来たときは、そのページで見ていた位置へ（出演者の詳細は毎回先頭から）
-  window.scrollTo(0, changed && page !== 'actor' ? scrollAt[page] || 0 : 0);
+  restoreScroll(changed && page !== 'actor' ? scrollAt[page] || 0 : 0);
+}
+
+/** y へスクロールする。一覧が作り直されて高さが足りないときは、末尾に着くたびに続きが読み込まれるので、届くまで繰り返す */
+let restoreToken = 0;
+function restoreScroll(y) {
+  const mine = ++restoreToken;
+  let n = 0;
+  const step = () => {
+    if (mine !== restoreToken) return; // 別のページに移った
+    window.scrollTo(0, y);
+    if (Math.abs(window.scrollY - y) < 4 || n++ > 25) return;
+    setTimeout(step, 80);
+  };
+  step();
 }
 
 // iPhone の Safari で開いているときだけ、ホーム画面への追加を案内する（閉じたら出さない）

@@ -6,9 +6,18 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.18.1';
+export const VERSION = '1.18.2';
 
 export const CHANGELOG = [
+  {
+    version: '1.18.2',
+    date: '2026-11-23',
+    items: [
+      '出演者の体型・特徴タグでの絞り込みが、取得の途中で押すと「0 人」のまま残ることがあるのを直した',
+      '詳細を閉じたあとに履歴の位置が先頭へ飛ぶこと、タブを行き来したときに位置が戻らないことがあるのを直した',
+      'お気に入りのスタジオを外したら、ホームの一覧にすぐ反映するようにした。シートの「戻る」操作を素早く 2 回押しても、余分に戻らないようにした',
+    ],
+  },
   {
     version: '1.18.1',
     date: '2026-11-23',

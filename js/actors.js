@@ -238,18 +238,26 @@ export async function loadTagList() {
 /** そのタグの付いた作品の出演者の id（Set）。7 日は取り直さない。onProgress(取得済みのページ数) */
 export async function actorsWithTag(tagId, onProgress) {
   const k = `actorTag:${tagId}`;
+  // 保存するのは、作品に付いていたカテゴリの id すべて（出演者に限らない）。読むときに出演者で絞るので、
+  // 出演者の一覧が揃う前に取っても、あとから増えた出演者が出なくなっても、結果が欠けない
+  const only = (all) => new Set(all.filter((id) => state.actors.has(id)));
   const cached = await db.kvGet(k, null);
-  if (cached && Date.now() - cached.at < TAG_ACTORS_TTL) return new Set(cached.ids);
-  const ids = new Set();
+  if (cached && cached.all && Date.now() - cached.at < TAG_ACTORS_TTL) return only(cached.all);
+  const all = new Set();
+  let got = 0;
   for (let page = 1, total = 1; page <= Math.min(total, TAG_PAGES); page++) {
-    const { data, totalPages } = await wpGet(OTOKOKI, 'posts', { categories: tagId, per_page: 100, page, _fields: 'categories' });
+    let res;
+    try { res = await wpGet(OTOKOKI, 'posts', { categories: tagId, per_page: 100, page, _fields: 'categories' }); } catch (e) { if (got) break; throw e; } // 途中から失敗したら、取れたところまで使う
+    const { data, totalPages } = res;
     total = totalPages;
-    for (const p of data || []) for (const c of p.categories || []) if (state.actors.has(c)) ids.add(c);
+    got += (data || []).length;
+    for (const p of data || []) for (const c of p.categories || []) all.add(c);
     if (onProgress) onProgress(page);
     if (page < Math.min(total, TAG_PAGES)) await sleep(250);
   }
-  await db.kvSet(k, { at: Date.now(), ids: [...ids] });
-  return ids;
+  if (!got) throw new Error('作品を取得できませんでした'); // 取れなかった結果は残さない
+  await db.kvSet(k, { at: Date.now(), all: [...all] });
+  return only(all);
 }
 
 // ───────────── 自分で足す情報（端末内だけ） ─────────────

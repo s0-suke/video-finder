@@ -47,6 +47,9 @@ const playing = (el) => !!el.querySelector('.player-on iframe');
 export function hide() {
   if (!isSheetOpen()) return;
   const el = sheet();
+  closing = false;
+  // 画面の切り替え（ディープリンクなど）でシートを履歴を戻さずに閉じたとき、残ったシートの印を外す（次のシートの戻る操作が空振りしないように）
+  if (history.state && history.state.sheet) history.replaceState({ ...history.state, sheet: false }, '');
   el.classList.remove('open');
   el.style.transform = '';
   $('#backdrop').classList.remove('open');
@@ -58,15 +61,17 @@ export function hide() {
   setTimeout(() => { if (!el.classList.contains('open') && !el.classList.contains('mini')) el.innerHTML = ''; }, 300);
 }
 
+let closing = false; // 閉じる「戻る」（履歴）の popstate を待っている間は、もう一度戻らない
 export function closeSheet() {
-  if (!isSheetOpen()) return;
-  if (history.state && history.state.sheet) history.back(); // popstate で hide される
+  if (!isSheetOpen() || closing) return;
+  if (history.state && history.state.sheet) { closing = true; history.back(); } // popstate で hide される
   else hide();
 }
 
 /** シートを閉じて、閉じる「戻る」（履歴）が済んでから fn を呼ぶ（先にページを移すと、あとから届く「戻る」で元のページに引き戻される） */
 export function afterClose(fn) {
-  if (history.state && history.state.sheet) { addEventListener('popstate', fn, { once: true }); closeSheet(); } else { closeSheet(); fn(); }
+  if (closing) return; // 閉じている途中の 2 回目のタップ
+  if (isSheetOpen() && history.state && history.state.sheet) { addEventListener('popstate', fn, { once: true }); closeSheet(); } else { closeSheet(); fn(); }
 }
 
 // ---- ミニプレイヤー ----

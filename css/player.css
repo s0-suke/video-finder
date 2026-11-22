@@ -15,8 +15,6 @@
   animation: player-pulse 1.6s ease-in-out infinite;
 }
 .player-bar.open .player-dot { background: var(--danger); }
-.player-bar.rejected { color: var(--text); }
-.player-bar.rejected .player-dot { background: var(--danger); animation: none; }
 .player-bar .btn { height: 32px; padding: 0 12px; font-size: 12px; flex: none; }
 @keyframes player-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .player-dot { animation: none; } }

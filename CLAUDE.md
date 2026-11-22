@@ -12,6 +12,7 @@
 
 - 構成: `js/main.js`（起動）→ `data.js`（メモリ上の状態とイベント）/ `crawler.js`（収集）/ `source.js`（本文の取得）/ `matching.js`（品番・統合キー。純粋関数）/ `db.js`（IndexedDB）/ `wp.js`（WordPress API）/ `ui/`（画面）。
   拡張用モジュールは `player.js`（再生）/ `favorites.js`（お気に入り）/ `details.js`（外部サイトの詳細情報。`details/` に otokoki・サンプル画像・全画面表示を分けている）/ `history.js`（視聴履歴）。
+  画面は 5 タブ（ホーム `ui/home.js` / 出演者 `ui/actors.js` / 履歴 `ui/history-view.js` / お気に入り `ui/favs.js` / 設定 `ui/settings.js`）。ページは URL のハッシュ（`#home` `#actors` `#history` `#favs` `#settings` `#actor/<id>`）で決まり、`ui/tabbar.js` と `main.js` の `route()` が切り替える。検索は独立したタブを持たず、各タブの上部の検索欄がそのタブの内容だけを絞る。動画の一覧（ホーム・履歴・お気に入り）は `ui/feed.js` の `createFeed` を共有する。DOM に依存しない一覧の判定（キーワード・日付の見出し）は `list-core.js`（`tests/list-core.test.js`）。
 - モジュール間は `data.js` の `emit` / `on` のイベント（'data' / 'progress' / 'favs' / 'history'）でつなぐ。設定画面への項目追加は `ui/settings.js` の `registerSettingsSection`。
 - スタイルは `css/base.css` と、拡張モジュールごとの `css/<module>.css`。
 - ファイルを増やしたら `sw.js` の `SHELL` に足す。`npm test`（`node --test`）が import 先・SHELL・index.html の参照漏れを検出する。

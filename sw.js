@@ -19,6 +19,7 @@ const SHELL = [
   './js/db.js',
   './js/wp.js',
   './js/matching.js',
+  './js/list-core.js',
   './js/actors-core.js',
   './js/analytics.js',
   './js/usage-core.js',
