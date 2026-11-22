@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.18.4';
+export const VERSION = '1.18.5';
 
 export const CHANGELOG = [
+  {
+    version: '1.18.5',
+    date: '2026-11-23',
+    items: [
+      '出演者の写真が読み込めなかったときは、出演作のサムネイル、それも読めなければ頭文字を出すようにした',
+    ],
+  },
   {
     version: '1.18.4',
     date: '2026-11-23',

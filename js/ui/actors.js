@@ -62,6 +62,23 @@ export function actorCardHTML(a) {
   </div>`;
 }
 
+/** 写真が読み込めなかったら、公式サイトの写真・出演作のサムネイルの順にやり直し、それも読めなければ頭文字にする */
+function bindAvatarFallback(root) {
+  root.addEventListener('error', (e) => {
+    const img = e.target;
+    if (!img || img.tagName !== 'IMG') return;
+    const box = img.closest('[data-av]');
+    if (!box) return;
+    const a = getActor(+box.dataset.av);
+    const next = a && a.profile && a.profile.photo && img.getAttribute('src') !== a.profile.photo ? a.profile.photo : '';
+    if (next) { img.src = next; return; }
+    const ph = document.createElement('span');
+    ph.className = 'av-ph';
+    ph.textContent = a ? initial(a) : '?';
+    img.replaceWith(ph);
+  }, true);
+}
+
 /** 取れた写真・情報に、カードを合わせる（カードごと作り直さない） */
 function refreshCard(root, a) {
   const card = root.querySelector(`.ag-card[data-actor="${a.id}"]`);
@@ -118,6 +135,7 @@ export function mountActorGrid(container) {
   const sentinel = document.createElement('div');
   sentinel.style.height = '1px';
   container.replaceChildren(grid, empty, sentinel);
+  bindAvatarFallback(grid);
 
   const io = new IntersectionObserver((es) => {
     for (const e of es) {
@@ -340,6 +358,7 @@ async function shrink(file) {
 
 export function initActorPage({ onBack }) {
   const root = $('#view-actor-body');
+  bindAvatarFallback(root);
   root.addEventListener('change', async (e) => {
     if (e.target.id !== 'ap-file' || !e.target.files[0]) return;
     try { await setCustom(+root.dataset.id, { photo: await shrink(e.target.files[0]) }); } catch { toast('画像を読み込めませんでした'); }
