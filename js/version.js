@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.18.6';
+export const VERSION = '1.19.0';
 
 export const CHANGELOG = [
+  {
+    version: '1.19.0',
+    date: '2026-11-23',
+    items: [
+      '設定の「お気に入り」のバックアップに、お気に入りの出演者・スタジオと視聴履歴も入れた（書き出し・読み込みの両方。前の書き出しファイルもそのまま読める。読み込みは今の内容に足し合わせる）',
+    ],
+  },
   {
     version: '1.18.6',
     date: '2026-11-23',

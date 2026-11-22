@@ -20,6 +20,7 @@ const SHELL = [
   './js/wp.js',
   './js/matching.js',
   './js/list-core.js',
+  './js/backup-core.js',
   './js/actors-core.js',
   './js/analytics.js',
   './js/usage-core.js',

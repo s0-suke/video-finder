@@ -11,13 +11,17 @@
 //   一覧から消えた動画（サイトの削除・収集データの削除など）でも中身が分かるように、登録時の情報を持っておく。
 //   posts は動画を構成していた投稿の key（統合キーが変わったときの付け替えに使う。data.js の findMoved）
 //
-// 書き出しファイルの形式
-//   { app: 'video-finder', type: 'favorites', version: 1, exportedAt, items: [行, …] }
+// 書き出しファイルの形式（お気に入りの動画・出演者・スタジオと、視聴履歴のバックアップ）
+//   { app: 'video-finder', type: 'favorites', version: 2, exportedAt, items: [行, …], actors: { id: 名前 }, studios: { key: 名前 }, history: [行, …] }
+//   version 1（動画だけ）も読める。読み込みは今の内容に足し合わせる（backup-core.js）
 
 import * as db from './db.js';
 import { state, on, emit, relocate, sourceKeys } from './data.js';
 import { toast, esc } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
+import { historyRows, importHistory } from './history.js';
+import { favActorsMap, importFavActors } from './actors.js';
+import { favStudiosMap, importFavStudios } from './studio-favs.js';
 import { track, currentSurface } from './analytics.js';
 
 const STORE = 'favs';
@@ -150,11 +154,11 @@ function renderSection(el) {
   el.innerHTML = `
     <div class="fav-count" data-role="count"></div>
     <div class="btn-row">
-      <button class="btn" type="button" data-act="export">書き出し</button>
+      <button class="btn" type="button" data-act="export">バックアップを書き出す</button>
       <button class="btn" type="button" data-act="import">読み込み</button>
       <input type="file" accept="application/json,.json" data-role="file" hidden>
     </div>
-    <p class="note fav-note">iPhone はしばらく開かないサイトのデータを消すことがあります。消えても戻せるよう、ときどき書き出してファイルに保存しておくと安心です。読み込みは今のお気に入りに足し合わせます（消えません）。</p>`;
+    <p class="note fav-note">お気に入りの動画・出演者・スタジオと視聴履歴をまとめて書き出せます。iPhone はしばらく開かないサイトのデータを消すことがあるので、ときどき書き出してファイルに保存しておくと安心です。読み込みは今の内容に足し合わせます（消えません）。</p>`;
   updateCount();
   const file = el.querySelector('[data-role="file"]');
   el.querySelector('[data-act="export"]').onclick = exportFavs;
@@ -181,18 +185,20 @@ function stamp() {
 }
 
 async function exportFavs() {
-  if (!rows.size) return toast('お気に入りがまだありません');
+  const actors = favActorsMap(), studios = favStudiosMap(), history = historyRows();
+  if (!rows.size && !Object.keys(actors).length && !Object.keys(studios).length && !history.length) return toast('書き出すものがまだありません');
   // share() はタップ直後に呼ぶ必要があるので、await を挟まずにメモリから作る
   const items = [...rows.values()].sort((a, b) => a.addedAt - b.addedAt);
-  const json = JSON.stringify({ app: 'video-finder', type: 'favorites', version: 1, exportedAt: new Date().toISOString(), items }, null, 1);
-  const name = `video-finder-favorites-${stamp()}.json`;
+  const json = JSON.stringify({ app: 'video-finder', type: 'favorites', version: 2, exportedAt: new Date().toISOString(), items, actors, studios, history }, null, 1);
+  const name = `video-finder-backup-${stamp()}.json`;
+  const summary = `動画 ${items.length.toLocaleString()}・出演者 ${Object.keys(actors).length.toLocaleString()}・スタジオ ${Object.keys(studios).length.toLocaleString()}・履歴 ${history.length.toLocaleString()}`;
   const file = new File([json], name, { type: 'application/json' });
 
   // iOS の Safari では共有シートの「"ファイル"に保存」がいちばん確実
   if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: 'お気に入りのバックアップ' });
-      toast(`${items.length.toLocaleString()} 件を書き出しました`);
+      await navigator.share({ files: [file], title: 'Video Finder のバックアップ' });
+      toast(`書き出しました（${summary}）`);
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return; // 共有シートを閉じただけ
@@ -207,7 +213,7 @@ async function exportFavs() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 60 * 1000);
-  toast(`${items.length.toLocaleString()} 件を書き出しました`);
+  toast(`書き出しました（${summary}）`);
 }
 
 // 読み込んだ 1 件を検査して、保存できる形にそろえる
@@ -231,7 +237,12 @@ async function importFavs(f) {
     return alert('読み込めませんでした: JSON ファイルではありません');
   }
   const list = Array.isArray(data) ? data : data && Array.isArray(data.items) ? data.items : null;
-  if (!list) return alert('読み込めませんでした: お気に入りの書き出しファイルではありません');
+  if (!list) return alert('読み込めませんでした: バックアップのファイルではありません');
+  // 出演者・スタジオ・履歴（version 2。なければ何もしない）
+  const extra = Array.isArray(data) ? {} : data;
+  const addedActors = importFavActors(extra.actors);
+  const addedStudios = importFavStudios(extra.studios);
+  const addedHistory = await importHistory(extra.history).catch(() => 0);
 
   const merged = [];
   let added = 0;
@@ -259,7 +270,8 @@ async function importFavs(f) {
   }
   fillMissing();
   emit('favs');
-  toast(added ? `${added.toLocaleString()} 件を追加しました（合計 ${rows.size.toLocaleString()} 件）` : '新しく追加するお気に入りはありませんでした');
+  const more = [addedActors && `出演者 ${addedActors}`, addedStudios && `スタジオ ${addedStudios}`, addedHistory && `履歴 ${addedHistory}`].filter(Boolean).join('・');
+  toast(added || more ? `追加しました（動画 ${added.toLocaleString()}${more ? '・' + more : ''}。お気に入りの動画は合計 ${rows.size.toLocaleString()} 件）` : '新しく追加するものはありませんでした');
   if (sectionEl && sectionEl.isConnected) {
     const note = sectionEl.querySelector('.fav-note');
     if (note) note.insertAdjacentHTML('beforebegin', `<p class="note">${esc(f.name)} から ${added.toLocaleString()} 件を追加しました</p>`);

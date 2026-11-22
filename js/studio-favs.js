@@ -4,6 +4,7 @@
 // 付け外しは、スタジオ一覧のシート（ui/filters.js）とホームの条件の行から。変わったら 'favstudios' を送る。
 
 import { emit } from './data.js';
+import { normalizeNameMap, mergeNameMaps } from './backup-core.js';
 
 const KEY = 'vfFavStudios';
 
@@ -20,4 +21,17 @@ export function toggleFavStudio(key, name = key) {
   try { localStorage.setItem(KEY, JSON.stringify(favs)); } catch { /* 保存できなくても、このあいだは効かない */ }
   emit('favstudios', key);
   return on;
+}
+
+/** 書き出し用: お気に入りのスタジオ { key: 名前 } */
+export const favStudiosMap = () => load();
+
+/** 読み込み: お気に入りのスタジオに足し合わせる。足した件数を返す */
+export function importFavStudios(obj) {
+  const { merged, added } = mergeNameMaps(load(), normalizeNameMap(obj));
+  if (added) {
+    try { localStorage.setItem(KEY, JSON.stringify(merged)); } catch { return 0; }
+    emit('favstudios');
+  }
+  return added;
 }

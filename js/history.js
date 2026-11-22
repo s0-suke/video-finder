@@ -2,6 +2,7 @@
 
 import * as db from './db.js';
 import { state, on, emit, relocate, sourceKeys } from './data.js';
+import { mergeHistory } from './backup-core.js';
 
 const MAX = 300;
 const viewed = new Map(); // key -> at（ミリ秒）
@@ -44,4 +45,17 @@ export async function recordView(video) {
     for (const k of recentKeys().slice(MAX)) { viewed.delete(k); rows.delete(k); await db.del('history', k); }
   }
   emit('history');
+}
+
+/** 書き出し用: 保存している履歴の行（新しい順） */
+export const historyRows = () => [...rows.values()].sort((a, b) => b.at - a.at);
+
+/** 読み込み: 履歴に足し合わせる（同じ動画は新しい見た日時を残す）。足した件数を返す */
+export async function importHistory(list) {
+  const { rows: changed, added } = mergeHistory([...rows.values()], Array.isArray(list) ? list : [], MAX);
+  if (!changed.length) return 0;
+  for (const r of changed) { viewed.set(r.key, r.at); rows.set(r.key, r); }
+  await db.putAll('history', changed);
+  emit('history');
+  return added;
 }

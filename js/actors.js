@@ -15,6 +15,7 @@ import { state, emit } from './data.js';
 import { normalizeCode, releaseCode, releaseTitleKey } from './matching.js';
 import { decodeEntities, sleep } from './util.js';
 import { parseActorName, ageFromTitles, countTags, actorHay } from './actors-core.js';
+import { normalizeNameMap, mergeNameMaps } from './backup-core.js';
 
 const OTOKOKI = 'https://otokoki.net/';
 const ACTOR_ROOT = 4877;
@@ -330,4 +331,17 @@ export function searchActors(q, { minCount = 1 } = {}) {
   const w = (q || '').normalize('NFKC').toLowerCase().trim();
   const words = w.split(/\s+/).filter(Boolean);
   return sorted.filter((a) => a.count >= minCount && words.every((x) => a.hay.includes(x)));
+}
+
+/** 書き出し用: お気に入りの出演者 { id: 名前 } */
+export const favActorsMap = () => loadFavs();
+
+/** 読み込み: お気に入りの出演者に足し合わせる（既にいる人は変えない）。足した人数を返す */
+export function importFavActors(obj) {
+  const { merged, added } = mergeNameMaps(loadFavs(), normalizeNameMap(obj, { numericKeys: true }));
+  if (added) {
+    try { localStorage.setItem(FAV_KEY, JSON.stringify(merged)); } catch { /* 保存できなければ足せない */ return 0; }
+    emit('favactors');
+  }
+  return added;
 }
