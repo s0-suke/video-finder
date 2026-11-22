@@ -1,125 +1,89 @@
-// 絞り込みシート（並び順・スタジオ・取得元サイト）
+// ホームの絞り込みシート（日付の基準・並び順・スタジオ・取得元サイト・サムネなしを隠す）と、スタジオ一覧
 
-import { $, esc } from '../util.js';
+import { $, esc, toast } from '../util.js';
 import { state } from '../data.js';
-import { openSheet, closeSheet } from './sheet.js';
-import { filters, saveFilters, render, renderChips, reshuffle } from './list.js';
+import { openSheet, closeSheet, afterClose } from './sheet.js';
 import { studioRows } from '../studios.js';
+import { isFavStudio, toggleFavStudio } from '../studio-favs.js';
 
-export function openFilters() {
+/** f: ホームの絞り込み（home.js の filters）。onApply(変更後の値) を適用ボタンで呼ぶ */
+export function openFilters(f, onApply) {
   const enabled = state.sites.filter((s) => s.enabled);
   openSheet(`
     <h2 style="margin-top:0">絞り込み</h2>
     <div class="field"><label>日付の基準</label>
       <div class="seg" id="f-dateby">
-        <button data-v="post" class="${filters.dateBy !== 'release' ? 'on' : ''}">掲載日</button>
-        <button data-v="release" class="${filters.dateBy === 'release' ? 'on' : ''}">発売日（目安）</button>
+        <button data-v="post" class="${f.dateBy !== 'release' ? 'on' : ''}">掲載日</button>
+        <button data-v="release" class="${f.dateBy === 'release' ? 'on' : ''}">発売日（目安）</button>
       </div>
-      <p class="note" style="margin:6px 0 0">掲載日は各サイトに載った日、発売日は元の動画が出た日の目安です（設定の「発売日の目安」を参照）。</p>
     </div>
     <div class="field"><label>並び順</label>
       <div class="seg" id="f-sort">
-        <button data-v="new" class="${filters.sort === 'new' ? 'on' : ''}">新しい順</button>
-        <button data-v="old" class="${filters.sort === 'old' ? 'on' : ''}">古い順</button>
-        <button data-v="random" class="${filters.sort === 'random' ? 'on' : ''}">ランダム</button>
+        <button data-v="new" class="${f.sort === 'new' ? 'on' : ''}">新しい順</button>
+        <button data-v="old" class="${f.sort === 'old' ? 'on' : ''}">古い順</button>
+        <button data-v="random" class="${f.sort === 'random' ? 'on' : ''}">ランダム</button>
       </div>
     </div>
     <div class="field"><label>スタジオ</label>
       <select id="f-studio"><option value="">すべて</option>
-        ${studioRows(state.studios).map(({ s, depth }) => `<option value="${esc(s.key)}" ${filters.studio === s.key ? 'selected' : ''}>${'　'.repeat(depth)}${depth ? '└ ' : ''}${esc(s.name)}（${s.total.toLocaleString()}）</option>`).join('')}
+        ${studioRows(state.studios).map(({ s, depth }) => `<option value="${esc(s.key)}" ${f.studio === s.key ? 'selected' : ''}>${'　'.repeat(depth)}${depth ? '└ ' : ''}${esc(s.name)}（${s.total.toLocaleString()}）</option>`).join('')}
       </select>
     </div>
     <div class="field"><label>取得元サイト</label>
       <select id="f-site"><option value="">すべて</option>
-        ${enabled.map((s) => `<option value="${s.id}" ${String(filters.site) === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
+        ${enabled.map((s) => `<option value="${s.id}" ${String(f.site) === String(s.id) ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}
       </select>
     </div>
-    <div class="field switch"><span>サムネイルのない動画を隠す<span class="note" style="display:block;font-size:11px">掲載元に画像がない動画（再生もできないことが多い）</span></span>
-      <button class="toggle ${filters.hideNoThumb ? 'on' : ''}" id="f-nothumb" aria-label="切り替え"></button>
+    <div class="field switch"><span>サムネイルのない動画を隠す</span>
+      <button class="toggle ${f.hideNoThumb ? 'on' : ''}" id="f-nothumb" aria-label="サムネイルのない動画を隠す"></button>
     </div>
     <div class="btn-row">
       <button class="btn" id="f-reset">リセット</button>
       <button class="btn primary" id="f-apply" style="flex:1;justify-content:center">適用</button>
     </div>
   `);
-  let sort = filters.sort;
-  let dateBy = filters.dateBy;
-  let hideNoThumb = filters.hideNoThumb;
+  let { sort, dateBy, hideNoThumb } = f;
   $('#f-nothumb').onclick = (e) => { hideNoThumb = !hideNoThumb; e.target.classList.toggle('on', hideNoThumb); };
-  $('#f-dateby').onclick = (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    dateBy = b.dataset.v;
-    for (const x of $('#f-dateby').children) x.classList.toggle('on', x === b);
-  };
-  $('#f-sort').onclick = (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    sort = b.dataset.v;
-    for (const x of $('#f-sort').children) x.classList.toggle('on', x === b);
-  };
-  const done = () => { saveFilters(); renderChips(); closeSheet(); render(); };
-  $('#f-reset').onclick = () => { Object.assign(filters, { sort: 'new', dateBy: 'post', studio: '', site: '', hideNoThumb: false }); done(); };
-  $('#f-apply').onclick = () => {
-    Object.assign(filters, { sort, dateBy, hideNoThumb, studio: $('#f-studio').value, site: $('#f-site').value });
-    if (sort === 'random') reshuffle();
-    done();
-  };
+  const seg = (id, set) => { $(id).onclick = (e) => { const b = e.target.closest('button'); if (!b) return; set(b.dataset.v); for (const x of $(id).children) x.classList.toggle('on', x === b); }; };
+  seg('#f-dateby', (v) => { dateBy = v; });
+  seg('#f-sort', (v) => { sort = v; });
+  $('#f-reset').onclick = () => { closeSheet(); onApply({ sort: 'new', dateBy: 'post', studio: '', site: '', hideNoThumb: false }); };
+  $('#f-apply').onclick = () => { closeSheet(); onApply({ sort, dateBy, hideNoThumb, studio: $('#f-studio').value, site: $('#f-site').value }); };
 }
 
-// スタジオ一覧（名前で絞り込み、本数の多い順。タップでそのスタジオに絞る）
+// スタジオ一覧（名前で探し、タップでそのスタジオに絞る。★ でお気に入りのスタジオにする）
 // 親（会社・メーカー）の下に子（レーベル）を並べる。親の本数は子を含めた合計で、親を選ぶと子の動画も出る。
 // 探していないときは親だけを並べ、「▸」で子を開く。探しているときは、当てはまる行を親の名前つきで並べる
 const expanded = new Set(); // 開いている親の key（シートを開き直しても覚えておく）
 
-/** onPick(key) を渡すと、選んだあとの動きを差し替える（スタジオのタブから開くとき、そのスタジオのホームへ移るため）。省略したら、いまの一覧を絞る */
-export function openStudioPicker(onPick) {
+/** current: いま選んでいるスタジオの key。onPick(key) は選んだとき（「すべて」は ''） */
+export function openStudioPicker({ current = '', onPick }) {
   const el = openSheet(`
     <h2 style="margin-top:0">スタジオ</h2>
     <input class="picker-q" type="search" placeholder="スタジオ名で探す" aria-label="スタジオ名で探す" autocomplete="off">
     <div class="picker-list"></div>
   `);
-  // シートを閉じる「戻る」（履歴）が済んでから移る（先に移ると、あとから届く「戻る」で、元のページに引き戻される）
-  const afterClose = (fn) => {
-    if (history.state && history.state.sheet) { addEventListener('popstate', fn, { once: true }); closeSheet(); }
-    else { closeSheet(); fn(); }
-  };
-  mountStudioPicker(el, onPick ? (key) => afterClose(() => onPick(key)) : (key) => {
-    filters.studio = key;
-    saveFilters(); renderChips(); closeSheet(); render();
-  });
-}
-
-/**
- * スタジオ一覧を el の中に作る（el に .picker-q と .picker-list が入っていること）。
- * シート（openStudioPicker）と検索タブ（ui/search.js）で共有する。選ばれたら onPick(key。「すべて」は ''）
- * opts.search を渡すと、検索語はそれ（関数）から読む（検索タブは、ページの上の検索欄を使う。.picker-q は要らない）
- */
-export function mountStudioPicker(el, onPick, opts = {}) {
   const q = el.querySelector('.picker-q');
-  const queryText = () => (opts.search ? opts.search() : q.value);
   const list = el.querySelector('.picker-list');
+  const byKey = new Map(state.studios.map((s) => [s.key, s]));
   const row = (s, { depth = 0, via = '' } = {}) => {
     const kids = s.children.length;
     const open = expanded.has(s.key);
     const toggle = kids && !via
       ? `<button class="picker-toggle ${open ? 'open' : ''}" data-toggle="${esc(s.key)}" aria-label="${open ? '閉じる' : '子のスタジオを開く'}"><span>▸</span></button>`
       : '<span class="picker-toggle gap"></span>';
-    const prefix = via ? `<small class="picker-via">${esc(via)} ›</small> ` : '';
-    const sub = kids ? `<small class="picker-kids">${kids} 件のレーベル</small>` : '';
+    const fav = isFavStudio(s.key);
     return `<div class="picker-item d${Math.min(depth, 2)}">${toggle}` +
-      `<button class="picker-row ${filters.studio === s.key ? 'on' : ''}" data-key="${esc(s.key)}"><span>${prefix}${esc(s.name)}${sub}</span><span class="picker-n">${s.total.toLocaleString()}</span></button></div>`;
+      `<button class="picker-row ${current === s.key ? 'on' : ''}" data-key="${esc(s.key)}"><span>${via ? `<small class="picker-via">${esc(via)} ›</small> ` : ''}${esc(s.name)}${kids ? `<small class="picker-kids">${kids} 件のレーベル</small>` : ''}</span><span class="picker-n">${s.total.toLocaleString()}</span></button>` +
+      `<button class="picker-star ${fav ? 'on' : ''}" data-fav="${esc(s.key)}" aria-pressed="${fav}" aria-label="${esc(s.name)}をお気に入り${fav ? 'から外す' : 'にする'}">${fav ? '★' : '☆'}</button></div>`;
   };
   const paint = () => {
-    const w = queryText().trim().normalize('NFKC').toLowerCase();
-    const byKey = new Map(state.studios.map((s) => [s.key, s]));
-    let html = filters.studio ? '<button class="picker-row" data-key="">すべてのスタジオ</button>' : '';
+    const w = q.value.trim().normalize('NFKC').toLowerCase();
+    let html = current ? '<button class="picker-row" data-key="">すべてのスタジオ</button>' : '';
     if (w) {
       const rows = state.studios.filter((s) => s.name.normalize('NFKC').toLowerCase().includes(w)).slice(0, 300);
-      html += rows.map((s) => row(s, { via: s.parent ? ((byKey.get(s.parent) || {}).name || '') : '' })).join('') +
-        (rows.length ? '' : '<p class="note">見つかりません</p>');
+      html += rows.map((s) => row(s, { via: s.parent ? ((byKey.get(s.parent) || {}).name || '') : '' })).join('') + (rows.length ? '' : '<p class="note">見つかりません</p>');
     } else {
-      // 親から順に。開いている親の子（その子も開いていれば孫）まで出す
       const walk = (s, depth) => {
         html += row(s, { depth });
         if (!expanded.has(s.key)) return;
@@ -130,21 +94,23 @@ export function mountStudioPicker(el, onPick, opts = {}) {
     list.innerHTML = html;
   };
   paint();
-  if (q) q.addEventListener('input', paint);
-  // マウス・キーボードの端末では、開いたらすぐ入力できるようにする。
-  // タッチ端末では、キーボードが一覧の半分を覆って、親子の一覧が見づらくなるので、検索欄をタップしたときに出す
-  const touch = navigator.maxTouchPoints > 0 || matchMedia('(pointer: coarse)').matches;
-  if (q && !touch) q.focus({ preventScroll: true });
+  q.addEventListener('input', paint);
   list.onclick = (e) => {
     const t = e.target.closest('[data-toggle]');
-    if (t) {
-      const k = t.dataset.toggle;
-      if (expanded.has(k)) expanded.delete(k); else expanded.add(k);
-      return paint();
+    if (t) { const k = t.dataset.toggle; if (expanded.has(k)) expanded.delete(k); else expanded.add(k); return paint(); }
+    const star = e.target.closest('[data-fav]');
+    if (star) {
+      const s = byKey.get(star.dataset.fav);
+      const added = toggleFavStudio(star.dataset.fav, s ? s.name : star.dataset.fav);
+      toast(added ? `★ ${s ? s.name : ''} をお気に入りにしました` : `${s ? s.name : ''} をお気に入りから外しました`);
+      star.classList.toggle('on', added);
+      star.textContent = added ? '★' : '☆';
+      star.setAttribute('aria-pressed', String(added));
+      return;
     }
     const b = e.target.closest('[data-key]');
     if (!b) return;
-    onPick(b.dataset.key);
+    const key = b.dataset.key;
+    afterClose(() => onPick(key));
   };
-  return paint;
 }

@@ -6,7 +6,8 @@
 //     一覧に出てきた人から少しずつ（brief）、詳細を開いたときは多めに（full）。結果は actors に残し、14 日は取り直さない。
 // 出演者のお気に入りは localStorage の vfFavActors（{ 出演者 id: 表示名 }）。スタジオのお気に入りと同じ作り。
 //
-// 注意: 取れるのは otokoki が公開している情報だけ。顔写真ではなく、出演作のアイキャッチ画像を「代表画像」として使う。
+// 注意: 取れるのは otokoki が公開している情報だけ。顔写真ではなく、出演作のアイキャッチ画像を「代表画像」として使う
+// （公式サイトの写真は、各サイトの規約が転載を禁じているため使わない。気に入った写真は出演者のページから自分で登録できる）。
 
 import * as db from './db.js';
 import { wpGet } from './wp.js';
@@ -21,7 +22,6 @@ const TAG_ROOTS = [4899, 4880]; // 体型・特徴 / プレイ（カテゴリ名
 const DAY = 24 * 60 * 60 * 1000;
 const INDEX_TTL = 7 * DAY;
 const PROFILE_TTL = 14 * DAY;
-const DEV = new URLSearchParams(location.search).has('dev');
 
 /** id -> 出演者の行（メモリ上。state.actors） */
 state.actors = new Map();
@@ -218,9 +218,43 @@ export function videosOf(a) {
   return out;
 }
 
+
+// ───────────── 体型・特徴タグでの絞り込み ─────────────
+
+const TAG_LIST_TTL = 30 * DAY;
+const TAG_ACTORS_TTL = 7 * DAY;
+const TAG_PAGES = 8; // 100 件 × 8 ページ（そのタグの新しい作品 800 本ぶんの出演者）
+
+/** 絞り込みに使う体型・特徴のタグ [{ id, name }]（otokoki の「体型・特徴」。作品の多い順。30 日に 1 回取る） */
+export async function loadTagList() {
+  const cached = await db.kvGet('actorTagList', null);
+  if (cached && Date.now() - cached.at < TAG_LIST_TTL) return cached.rows;
+  const { data } = await wpGet(OTOKOKI, 'categories', { parent: TAG_ROOTS[0], per_page: 100, orderby: 'count', order: 'desc', _fields: 'id,name,count' });
+  const rows = (data || []).map((c) => ({ id: c.id, name: clean(decodeEntities(c.name)) }));
+  if (rows.length) await db.kvSet('actorTagList', { at: Date.now(), rows });
+  return rows;
+}
+
+/** そのタグの付いた作品の出演者の id（Set）。7 日は取り直さない。onProgress(取得済みのページ数) */
+export async function actorsWithTag(tagId, onProgress) {
+  const k = `actorTag:${tagId}`;
+  const cached = await db.kvGet(k, null);
+  if (cached && Date.now() - cached.at < TAG_ACTORS_TTL) return new Set(cached.ids);
+  const ids = new Set();
+  for (let page = 1, total = 1; page <= Math.min(total, TAG_PAGES); page++) {
+    const { data, totalPages } = await wpGet(OTOKOKI, 'posts', { categories: tagId, per_page: 100, page, _fields: 'categories' });
+    total = totalPages;
+    for (const p of data || []) for (const c of p.categories || []) if (state.actors.has(c)) ids.add(c);
+    if (onProgress) onProgress(page);
+    if (page < Math.min(total, TAG_PAGES)) await sleep(250);
+  }
+  await db.kvSet(k, { at: Date.now(), ids: [...ids] });
+  return ids;
+}
+
 // ───────────── 自分で足す情報（端末内だけ） ─────────────
 
-/** 写真（縮小した data URL）・公式サイトの URL を、自分で登録する。空文字で消す。索引の更新でも残る */
+/** 写真（縮小した data URL）を、自分で登録する。空文字で消す。索引の更新でも残る */
 export async function setCustom(id, patch) {
   const a = state.actors.get(+id);
   if (!a) return null;
@@ -265,6 +299,3 @@ export function searchActors(q, { minCount = 1 } = {}) {
   const words = w.split(/\s+/).filter(Boolean);
   return sorted.filter((a) => a.count >= minCount && words.every((x) => a.hay.includes(x)));
 }
-
-/** 開発用: ?dev のとき、索引を小さくするのではなく、そのまま取る（出演者は 22 リクエストで済む） */
-export const isDev = DEV;

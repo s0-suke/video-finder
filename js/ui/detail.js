@@ -17,10 +17,9 @@ import { favButton } from '../favorites.js';
 import { mountDetails } from '../details.js';
 import { recordView } from '../history.js';
 import { releaseSpan, releaseLabel } from '../release.js';
-import { feature } from '../features.js';
-import { openSheet, closeSheet, miniPlayer, expandMini, closeMini } from './sheet.js';
-import { setQuery, setStudio } from './list.js';
-import { showActor } from '../actor.js';
+import { openSheet, afterClose, miniPlayer, expandMini, closeMini } from './sheet.js';
+import { showHome } from './home.js';
+import { gotoActor } from './actors.js';
 import { findActor } from '../actors.js';
 import { track, usageContext, currentSurface } from '../analytics.js';
 
@@ -52,7 +51,7 @@ function goBack() {
 
 // 同じスタジオの動画（新しい順。自分自身は除く）
 function relatedHTML(video) {
-  if (!feature('related') || !video.studioKey) return '';
+  if (!video.studioKey) return '';
   const list = [];
   for (const v of state.videos) {
     if (v.studioKey === video.studioKey && v.key !== video.key && v.title !== video.title) list.push(v);
@@ -93,7 +92,7 @@ export function openDetail(video, opts = {}) {
   // ミニプレイヤーで再生中の動画なら、それを大きく表示する（読み込み直さない）
   const m = miniPlayer();
   if (m && m.dataset.key === video.key) return expandMini();
-  nav = opts.list && feature('swipeNav') ? { list: opts.list, index: opts.index } : null;
+  nav = opts.list ? { list: opts.list, index: opts.index } : null;
   if (!opts.keepBack && !opts.fromRelated) back = [];
   track('open', { src: opts.src || (opts.fromRelated ? 'related' : opts.keepBack ? 'back' : currentSurface()), newV: isNew(video), ...usageContext() });
 
@@ -138,14 +137,12 @@ export function openDetail(video, opts = {}) {
   const hero = el.querySelector('[data-role="hero"]');
   el.querySelector('[data-role="fav"]').appendChild(favButton(video));
   mountDetails(el.querySelector('[data-role="details"]'), video, {
-    onTag: (t) => { closeSheet(); setQuery(t); },
-    onStudio: (key) => { closeSheet(); setStudio(key); },
-    // 出演者データベースにいる人なら、その人のページ（出演作の一覧）へ。いなければキーワードで絞り込む
+    onTag: (t) => afterClose(() => showHome({ q: t })),
+    onStudio: (key) => afterClose(() => showHome({ studio: key })),
+    // 出演者データベースにいる人なら、その人のページ（出演作の一覧）へ。いなければ、名前で動画を探す
     onActor: (name, q) => {
       const a = findActor(name);
-      closeSheet();
-      if (a) import('./actors.js').then((m) => m.gotoActor(a.id));
-      else showActor(name, q);
+      afterClose(() => (a ? gotoActor(a.id) : showHome({ q: q || name })));
     },
   });
 
@@ -162,9 +159,9 @@ export function openDetail(video, opts = {}) {
 
   el.addEventListener('click', (e) => {
     const t = e.target.closest('[data-q]');
-    if (t) { closeSheet(); return setQuery(t.dataset.q); }
+    if (t) return afterClose(() => showHome({ q: t.dataset.q }));
     const st = e.target.closest('[data-studio]');
-    if (st) { closeSheet(); return setStudio(st.dataset.studio); }
+    if (st) return afterClose(() => showHome({ studio: st.dataset.studio }));
     const em = e.target.closest('[data-embed]');
     if (em) return play(em.dataset.embed);
     const rel = e.target.closest('[data-related]');

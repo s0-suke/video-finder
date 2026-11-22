@@ -2,7 +2,7 @@
 // ネット優先で最新版を取り、オフラインのときだけキャッシュを返す。
 // 各動画サイトへの通信（API・画像・プレイヤー）はキャッシュせずそのまま通す。
 // ファイルを増やしたら SHELL にも足すこと（tests/structure.test.js が漏れを検出する）。
-const CACHE = 'vf-v11';
+const CACHE = 'vf-v12';
 const SHELL = [
   './',
   './index.html',
@@ -36,20 +36,19 @@ const SHELL = [
   './js/history.js',
   './js/release.js',
   './js/release-estimate.js',
-  './js/features.js',
   './js/version.js',
   './js/selftest.js',
   './js/ui/sheet.js',
-  './js/ui/list.js',
   './js/ui/detail.js',
   './js/ui/filters.js',
   './js/ui/settings.js',
-  './js/ui/studios.js',
   './js/ui/home.js',
-  './js/ui/search.js',
+  './js/ui/feed.js',
+  './js/ui/history-view.js',
+  './js/ui/favs.js',
+  './js/studio-favs.js',
   './js/ui/actors.js',
   './js/ui/tabbar.js',
-  './js/actor.js',
 ];
 
 self.addEventListener('install', (e) => {

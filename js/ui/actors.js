@@ -1,25 +1,31 @@
-// 出演者の画面（一覧の行・一覧・詳細ページ・お気に入りの出演者）
+// 出演者の画面
 //
-// - actorRowHTML / mountActorList: 検索タブの「出演者」と、お気に入りの出演者で使う一覧。行 = 代表画像・名前・体型・作品数・♥
-// - openActorPage / renderActorPage: #actor/<id> の詳細ページ（代表画像・別名・身長/体重/年齢・タグ・出演作・otokoki へのリンク）
-// - 代表画像・タグは、一覧に出てきた行から少しずつ取る（actors.js の enrich）。詳細を開いたときは出演作の照合材料も取る
+// - 出演者タブ（#actors）: 正方形の写真を 2 列に並べたグリッド。名前・特徴での検索、体型タグ・年代・お気に入りでの絞り込み、並び順
+// - mountActorGrid: そのグリッドの部品（お気に入りのタブの「出演者」でも使う）
+// - 詳細ページ（#actor/<id>）: 写真・別名・身長/体重/年齢・タグ・出演作
+// - 写真は、一覧に出てきたカードから少しずつ取る（actors.js の enrich。出演作のアイキャッチ画像）。自分で登録した写真が優先
 // - お気に入りは actors.js の isFavActor / toggleFavActor。♥ を押すと全部の画面の ♥ が合う（'favactors' イベント）
 
 import { $, esc, toast } from '../util.js';
 import { on } from '../data.js';
 import { actorSummary } from '../actors-core.js';
-import { allActors, getActor, searchActors, enrich, videosOf, ageOf, isFavActor, favActorIds, toggleFavActor, setCustom, photoOf } from '../actors.js';
+import {
+  allActors, getActor, searchActors, enrich, videosOf, ageOf, isFavActor, toggleFavActor, setCustom, photoOf,
+  syncIndex, loadTagList, actorsWithTag,
+} from '../actors.js';
 import { openDetail } from './detail.js';
+import { bindSearch } from './feed.js';
+import { showHome } from './home.js';
 
-const PAGE = 50;
+const PAGE = 40;
 const initial = (a) => (a.display || '?').replace(/[^\p{L}\p{N}]/gu, '').slice(0, 1) || '?';
 
-/** 出演者のページへ移る直前のページ（'#home' / '#search' / '#favactors' など）。戻る先と、どのタブを選んだ表示にするかに使う */
-export let actorFrom = '#search';
+/** 出演者のページへ移る直前のページ（'#actors' / '#favs' / '#home' など）。戻る先と、どのタブを選んだ表示にするかに使う */
+export let actorFrom = '#actors';
 
 /** 出演者のページへ移る（タブの切り替えと同じく、履歴に積まない） */
 export function gotoActor(id) {
-  if (!/^#actor\//.test(location.hash)) actorFrom = location.hash === '' ? (location.hash || '#search') : location.hash;
+  if (!/^#actor\//.test(location.hash)) actorFrom = location.hash || '#actors';
   history.replaceState(history.state, '', `${location.pathname}${location.search}#actor/${id}`);
   dispatchEvent(new HashChangeEvent('hashchange'));
 }
@@ -29,55 +35,48 @@ export const actorIdFromHash = () => {
   return m ? +m[1] : null;
 };
 
-// ───────────── 部品 ─────────────
+// ───────────── グリッドの部品 ─────────────
 
-const avatarHTML = (a) => {
+const photoHTML = (a) => {
   const photo = photoOf(a);
-  return `<span class="av" data-av="${a.id}">${photo ? `<img src="${esc(photo)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<span class="av-ph">${esc(initial(a))}</span>`}</span>`;
+  return photo ? `<img src="${esc(photo)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<span class="av-ph">${esc(initial(a))}</span>`;
 };
 
 const heartHTML = (a) => {
-  const on = isFavActor(a.id);
-  return `<button class="heart-btn ${on ? 'on' : ''}" type="button" data-fav-actor="${a.id}" aria-pressed="${on}" aria-label="${esc(a.display)}をお気に入り${on ? 'から外す' : 'にする'}">${on ? '♥' : '♡'}</button>`;
+  const f = isFavActor(a.id);
+  return `<button class="heart-btn ${f ? 'on' : ''}" type="button" data-fav-actor="${a.id}" aria-pressed="${f}" aria-label="${esc(a.display)}をお気に入り${f ? 'から外す' : 'にする'}">${f ? '♥' : '♡'}</button>`;
 };
 
-/** 一覧の 1 行 */
-export function actorRowHTML(a) {
+function cardInfo(a) {
   const sum = actorSummary({ ...a, age: ageOf(a) });
-  const sub = [sum, a.descriptor, a.label ? `${a.label}` : ''].filter(Boolean).join(' · ');
-  const tags = ((a.profile && a.profile.tags) || []).slice(0, 3).map((t) => t.name).join(' ・ ');
-  return `<div class="actor-row" data-actor="${a.id}" role="button" tabindex="0">
-    ${avatarHTML(a)}
-    <span class="ar-main">
-      <span class="ar-name">${esc(a.display)}</span>
-      ${sub ? `<small class="ar-sub">${esc(sub)}</small>` : ''}
-      ${tags ? `<small class="ar-tags">${esc(tags)}</small>` : ''}
-    </span>
-    <span class="ar-n">${a.count.toLocaleString()}<small>本</small></span>
-    ${heartHTML(a)}
+  return [sum || a.descriptor || a.label, `${a.count.toLocaleString()} 本`].filter(Boolean).join(' · ');
+}
+
+/** グリッドの 1 枚 */
+export function actorCardHTML(a) {
+  return `<div class="ag-card" data-actor="${a.id}" role="button" tabindex="0">
+    <div class="ag-photo" data-av="${a.id}">${photoHTML(a)}${heartHTML(a)}</div>
+    <div class="ag-name">${esc(a.display)}</div>
+    <div class="ag-sub">${esc(cardInfo(a))}</div>
   </div>`;
 }
 
-/** 行の代表画像・タグを、取れたものから差し替える（行ごと作り直さない） */
-function refreshRow(root, a) {
-  const row = root.querySelector(`.actor-row[data-actor="${a.id}"]`);
-  if (!row) return;
-  const av = row.querySelector('.av');
+/** 取れた写真・情報に、カードを合わせる（カードごと作り直さない） */
+function refreshCard(root, a) {
+  const card = root.querySelector(`.ag-card[data-actor="${a.id}"]`);
+  if (!card) return;
+  const ph = card.querySelector('.ag-photo');
   const photo = photoOf(a);
-  if (photo && av && !av.querySelector('img')) av.innerHTML = `<img src="${esc(photo)}" loading="lazy" referrerpolicy="no-referrer" alt="">`;
-  const tmp = document.createElement('div');
-  tmp.innerHTML = actorRowHTML(a);
-  const fresh = tmp.firstElementChild;
-  const main = row.querySelector('.ar-main');
-  if (main) main.innerHTML = fresh.querySelector('.ar-main').innerHTML;
+  if (photo && !ph.querySelector('img')) { ph.querySelector('.av-ph')?.remove(); ph.insertAdjacentHTML('afterbegin', photoHTML(a)); }
+  card.querySelector('.ag-sub').textContent = cardInfo(a);
 }
 
-// 見えている行のプロフィールを、2 つずつ順に取る（取りすぎて otokoki に負担をかけない）
+// 見えているカードのプロフィールを、2 つずつ取る（取りすぎて otokoki に負担をかけない。いま見えているものから先に）
 const queue = [];
 let running = 0;
 function pump() {
   while (running < 2 && queue.length) {
-    const { id, done } = queue.shift();
+    const { id, done } = queue.pop();
     running++;
     enrich(id, 'brief').then((a) => done(a)).catch(() => {}).finally(() => { running--; pump(); });
   }
@@ -92,77 +91,6 @@ function lazyEnrich(id, done) {
   pump();
 }
 
-/**
- * 出演者の一覧を container に作る。opts: { ids（この id だけ。なければ全員）, query, sort: 'count'|'name', favOnly, minCount }
- * 返り値の update(opts) で、条件を変えて作り直す。スクロールで続きを足し、見えた行の代表画像を取る。
- */
-export function mountActorList(container, initialOpts = {}) {
-  let opts = { sort: 'count', minCount: 1, ...initialOpts };
-  let rows = [];
-  let shown = 0;
-  const list = document.createElement('div');
-  list.className = 'actor-list';
-  const sentinel = document.createElement('div');
-  sentinel.style.height = '1px';
-  const empty = document.createElement('div');
-  empty.className = 'state hidden';
-  container.replaceChildren(list, empty, sentinel);
-
-  const io = new IntersectionObserver((es) => {
-    for (const e of es) {
-      if (!e.isIntersecting) continue;
-      if (e.target === sentinel) { more(); continue; }
-      io.unobserve(e.target);
-      lazyEnrich(+e.target.dataset.actor, (a) => refreshRow(list, a));
-    }
-  }, { rootMargin: '400px' });
-
-  const build = () => {
-    let r = opts.ids ? opts.ids.map(getActor).filter(Boolean) : searchActors(opts.query, { minCount: opts.minCount });
-    if (opts.ids && opts.query) { const w = opts.query.normalize('NFKC').toLowerCase().split(/\s+/).filter(Boolean); r = r.filter((a) => w.every((x) => a.hay.includes(x))); }
-    if (opts.favOnly) r = r.filter((a) => isFavActor(a.id));
-    if (opts.sort === 'name') r = [...r].sort((a, b) => a.display.localeCompare(b.display, 'ja'));
-    // お気に入りを先頭に（作品数順・名前順のどちらでも）
-    const favs = r.filter((a) => isFavActor(a.id));
-    rows = favs.length && !opts.favOnly ? [...favs, ...r.filter((a) => !isFavActor(a.id))] : r;
-  };
-  const more = () => {
-    const next = rows.slice(shown, shown + PAGE);
-    if (!next.length) return;
-    list.insertAdjacentHTML('beforeend', next.map(actorRowHTML).join(''));
-    for (const el of [...list.querySelectorAll('.actor-row')].slice(shown, shown + next.length)) io.observe(el);
-    shown += next.length;
-  };
-  const paint = () => {
-    list.innerHTML = '';
-    shown = 0;
-    build();
-    empty.classList.toggle('hidden', rows.length > 0);
-    empty.textContent = opts.emptyText || (allActors().length ? '見つかりません' : '出演者を取得しています…');
-    more();
-  };
-  io.observe(sentinel);
-
-  list.addEventListener('click', (e) => {
-    const heart = e.target.closest('[data-fav-actor]');
-    if (heart) { e.stopPropagation(); return onHeart(+heart.dataset.favActor); }
-    const row = e.target.closest('.actor-row');
-    if (row) gotoActor(+row.dataset.actor);
-  });
-  list.addEventListener('keydown', (e) => {
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.actor-row')) { e.preventDefault(); gotoActor(+e.target.dataset.actor); }
-  });
-  // ♥ が変わったら（別の画面でも）、この一覧の ♥ だけ合わせる（並びはそのまま。押した行が動かないように）
-  // （on は解除できないので、この一覧の要素が画面から外れていたら何もしない）
-  on('favactors', () => { if (list.isConnected) syncHearts(list); });
-  paint();
-  return {
-    update(next) { opts = { ...opts, ...next }; paint(); },
-    destroy() { io.disconnect(); },
-    count: () => rows.length,
-  };
-}
-
 function onHeart(id) {
   const a = getActor(id);
   const added = toggleFavActor(id);
@@ -171,11 +99,176 @@ function onHeart(id) {
 
 function syncHearts(root) {
   for (const b of root.querySelectorAll('[data-fav-actor]')) {
-    const on = isFavActor(+b.dataset.favActor);
-    b.classList.toggle('on', on);
-    b.textContent = on ? '♥' : '♡';
-    b.setAttribute('aria-pressed', String(on));
+    const f = isFavActor(+b.dataset.favActor);
+    b.classList.toggle('on', f);
+    b.textContent = f ? '♥' : '♡';
+    b.setAttribute('aria-pressed', String(f));
   }
+}
+
+/** container にグリッドを作る。返り値: { setRows(出演者の配列, 0 件のときの案内) }。スクロールで続きを足し、見えたカードの写真を取る */
+export function mountActorGrid(container) {
+  let rows = [];
+  let shown = 0;
+  const grid = document.createElement('div');
+  grid.className = 'actor-grid';
+  const empty = document.createElement('div');
+  empty.className = 'state hidden';
+  const sentinel = document.createElement('div');
+  sentinel.style.height = '1px';
+  container.replaceChildren(grid, empty, sentinel);
+
+  const io = new IntersectionObserver((es) => {
+    for (const e of es) {
+      if (!e.isIntersecting) continue;
+      if (e.target === sentinel) { more(); continue; }
+      io.unobserve(e.target);
+      lazyEnrich(+e.target.dataset.actor, (a) => refreshCard(grid, a));
+    }
+  }, { rootMargin: '400px' });
+  const more = () => {
+    if (!grid.offsetParent) return;
+    const next = rows.slice(shown, shown + PAGE);
+    if (!next.length) return;
+    grid.insertAdjacentHTML('beforeend', next.map(actorCardHTML).join(''));
+    for (const el of [...grid.querySelectorAll('.ag-card')].slice(shown, shown + next.length)) io.observe(el);
+    shown += next.length;
+  };
+  io.observe(sentinel);
+
+  grid.addEventListener('click', (e) => {
+    const heart = e.target.closest('[data-fav-actor]');
+    if (heart) { e.stopPropagation(); return onHeart(+heart.dataset.favActor); }
+    const card = e.target.closest('.ag-card');
+    if (card) gotoActor(+card.dataset.actor);
+  });
+  grid.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('.ag-card')) { e.preventDefault(); gotoActor(+e.target.dataset.actor); }
+  });
+  // ♥ が変わったら（別の画面でも）、この一覧の ♥ だけ合わせる（並びはそのまま。押したカードが動かないように）
+  on('favactors', () => { if (grid.isConnected) syncHearts(grid); });
+
+  return {
+    setRows(next, emptyText = '見つかりません') {
+      rows = next;
+      shown = 0;
+      grid.innerHTML = '';
+      empty.classList.toggle('hidden', rows.length > 0);
+      empty.innerHTML = emptyText;
+      more();
+    },
+    count: () => rows.length,
+  };
+}
+
+// ───────────── 出演者タブ（#actors） ─────────────
+
+const AGES = [
+  { id: 'a20', label: '〜20代', test: (n) => n < 30 },
+  { id: 'a30', label: '30代', test: (n) => n >= 30 && n < 40 },
+  { id: 'a40', label: '40代〜', test: (n) => n >= 40 },
+];
+const AF_KEY = 'actorFilters';
+const af = (() => { try { return { mode: 'all', tag: 0, age: '', sort: 'count', ...JSON.parse(localStorage.getItem(AF_KEY) || '{}') }; } catch { return { mode: 'all', tag: 0, age: '', sort: 'count' }; } })();
+af.q = '';
+const saveAf = () => { try { const { q, ...rest } = af; localStorage.setItem(AF_KEY, JSON.stringify(rest)); } catch { /* 保存できなくても動く */ } };
+
+let actorsGrid = null;
+let tags = [];
+let tagSet = null; // 選んだタグの付いた作品の出演者 id（取得中は null）
+let tagBusy = 0; // 取得の通し番号（選び直したら古い取得の結果は捨てる）
+let dirty = true;
+
+function computeActors() {
+  let r = searchActors(af.q, { minCount: 1 });
+  if (af.mode === 'fav') r = r.filter((a) => isFavActor(a.id));
+  if (af.age) { const t = AGES.find((x) => x.id === af.age); r = r.filter((a) => { const n = ageOf(a); return n && t.test(n); }); }
+  if (af.tag && tagSet) r = r.filter((a) => tagSet.has(a.id));
+  if (af.sort === 'name') r = [...r].sort((a, b) => a.display.localeCompare(b.display, 'ja'));
+  return r;
+}
+
+function renderActorChips() {
+  const chip = (f, attrs, label) => `<button class="chip ${f ? 'on' : ''}" ${attrs}>${label}</button>`;
+  $('#actors-chips').innerHTML =
+    chip(!af.mode.startsWith('fav') && !af.tag && !af.age, 'data-reset', 'すべて') +
+    chip(af.mode === 'fav', 'data-mode="fav"', '♥ お気に入り') +
+    tags.map((t) => chip(af.tag === t.id, `data-tag="${t.id}"`, esc(t.name))).join('') +
+    AGES.map((t) => chip(af.age === t.id, `data-age="${t.id}"`, t.label)).join('');
+  const on = $('#actors-chips .chip.on:not([data-reset])');
+  if (on) on.scrollIntoView({ inline: 'center', block: 'nearest' });
+}
+
+function renderActorList() {
+  dirty = false;
+  const rows = computeActors();
+  const loadingTag = af.tag && !tagSet;
+  renderActorChips();
+  $('#actors-meta').innerHTML = `<span>${loadingTag ? '調べています…' : `${rows.length.toLocaleString()} 人`}</span>` +
+    `<button class="cond" data-sort>並び順: ${af.sort === 'name' ? '名前順' : '作品数順'}</button>`;
+  actorsGrid.setRows(loadingTag ? [] : rows, allActors().length
+    ? (af.mode === 'fav' ? 'お気に入りの出演者はまだいません。出演者の ♡ を押すと追加されます' : '見つかりません')
+    : '出演者を取得しています…');
+}
+
+async function pickTag(id) {
+  af.tag = af.tag === id ? 0 : id;
+  tagSet = null;
+  saveAf();
+  const mine = ++tagBusy;
+  if (!af.tag) { tagSet = null; return renderActorList(); }
+  renderActorList();
+  try {
+    const set = await actorsWithTag(af.tag);
+    if (mine !== tagBusy) return;
+    tagSet = set;
+  } catch {
+    if (mine !== tagBusy) return;
+    toast('通信できませんでした。あとでもう一度お試しください');
+    af.tag = 0; saveAf();
+  }
+  renderActorList();
+}
+
+function initActors() {
+  actorsGrid = mountActorGrid($('#actors-list'));
+  bindSearch($('#aq'), $('#aq-clear'), (q) => { af.q = q; renderActorList(); });
+  $('#actors-chips').onclick = (e) => {
+    const b = e.target.closest('.chip');
+    if (!b) return;
+    if (b.dataset.reset !== undefined) { Object.assign(af, { mode: 'all', tag: 0, age: '' }); tagSet = null; tagBusy++; saveAf(); return renderActorList(); }
+    if (b.dataset.mode) { af.mode = af.mode === b.dataset.mode ? 'all' : b.dataset.mode; saveAf(); return renderActorList(); }
+    if (b.dataset.age) { af.age = af.age === b.dataset.age ? '' : b.dataset.age; saveAf(); return renderActorList(); }
+    if (b.dataset.tag) pickTag(+b.dataset.tag);
+  };
+  $('#actors-meta').onclick = (e) => {
+    if (!e.target.closest('[data-sort]')) return;
+    af.sort = af.sort === 'name' ? 'count' : 'name';
+    saveAf();
+    renderActorList();
+  };
+  on('actors', () => { if (location.hash !== '#actors') dirty = true; });
+  tags = [];
+  loadTagList().then((rows) => { tags = rows; if (location.hash === '#actors') renderActorChips(); }).catch(() => {});
+  // 選んでいたタグがあれば、その出演者を取り直す
+  if (af.tag) { const id = af.tag; af.tag = 0; pickTag(id); }
+}
+
+/** タブを開いたとき（route から） */
+export function openActors() {
+  if (!actorsGrid) initActors();
+  const empty = !allActors().length;
+  if (empty) {
+    const note = $('#actors-note');
+    note.textContent = '出演者の一覧を取得しています…（初回だけ）';
+    note.classList.remove('hidden');
+    syncIndex({ onProgress: (n) => { note.textContent = `出演者の一覧を取得しています… ${n.toLocaleString()} 人`; } })
+      .then(() => { note.classList.add('hidden'); if (location.hash === '#actors') renderActorList(); })
+      .catch(() => { note.textContent = '通信できませんでした。あとでもう一度開いてください'; });
+  } else {
+    syncIndex().catch(() => {}); // 古ければ（7 日）裏で更新
+  }
+  if (dirty || empty || !actorsGrid.count()) renderActorList(); else renderActorChips();
 }
 
 // ───────────── 詳細ページ ─────────────
@@ -187,7 +280,7 @@ export function renderActorPage(id) {
   const root = $('#view-actor-body');
   const a = getActor(id);
   if (!a) {
-    root.innerHTML = `<div class="state">出演者が見つかりません。<div class="btn-row" style="justify-content:center"><button class="btn" data-act="to-search">検索に戻る</button></div></div>`;
+    root.innerHTML = '<div class="state">出演者が見つかりません</div>';
     return;
   }
   const draw = (cur) => {
@@ -197,7 +290,7 @@ export function renderActorPage(id) {
     const vids = videosOf(cur);
     root.innerHTML = `
       <div class="ap-head">
-        ${avatarHTML(cur).replace('class="av"', 'class="av av-lg"')}
+        <span class="av av-lg" data-av="${cur.id}">${photoHTML(cur)}</span>
         <div class="ap-title">
           <h1>${esc(cur.display)}</h1>
           ${cur.aliases.length > 1 ? `<div class="ap-alias">別名: ${esc(cur.aliases.filter((x) => x !== cur.display).join(' / '))}</div>` : ''}
@@ -218,15 +311,10 @@ export function renderActorPage(id) {
       <div class="ap-links">
         <button class="btn" type="button" data-act="search-words">名前で動画を探す</button>
         ${cur.link ? `<a class="btn" href="${esc(cur.link)}" target="_blank" rel="noopener noreferrer">otokoki で見る ↗</a>` : ''}
-        ${safeUrl(cur.custom && cur.custom.site) ? `<a class="btn" href="${esc(cur.custom.site)}" target="_blank" rel="noopener noreferrer">公式サイト ↗</a>` : ''}
-      </div>
-      <div class="ap-links">
         <button class="btn ghost" type="button" data-act="set-photo">写真を設定</button>
         ${cur.custom && cur.custom.photo ? '<button class="btn ghost" type="button" data-act="clear-photo">写真を外す</button>' : ''}
-        <button class="btn ghost" type="button" data-act="set-site">公式サイトを登録</button>
         <input type="file" accept="image/*" id="ap-file" hidden>
       </div>
-      <div class="note">写真・公式サイトは、この端末の中だけに保存されます</div>
       <div class="section-title">手元の出演作</div>
       ${p.full ? '' : '<div class="note" id="ap-loading">出演作を照合しています…</div>'}
       <div class="grid" id="ap-grid">${vids.slice(0, PER_ROW_GRID).map((v, i) => workCardHTML(v, i)).join('')}</div>
@@ -254,8 +342,6 @@ function workCardHTML(v, i) {
   </button>`;
 }
 
-const safeUrl = (u) => { try { return /^https?:$/.test(new URL(u).protocol) ? u : ''; } catch { return ''; } };
-
 /** 選んだ画像を 256px 四方（中央切り抜き）の JPEG にして data URL で返す */
 async function shrink(file) {
   const bmp = await createImageBitmap(file);
@@ -266,7 +352,7 @@ async function shrink(file) {
   return c.toDataURL('image/jpeg', 0.85);
 }
 
-export function initActorPage({ onSearchWords, onBack }) {
+export function initActorPage({ onBack }) {
   const root = $('#view-actor-body');
   root.addEventListener('change', async (e) => {
     if (e.target.id !== 'ap-file' || !e.target.files[0]) return;
@@ -276,31 +362,16 @@ export function initActorPage({ onSearchWords, onBack }) {
   root.addEventListener('click', (e) => {
     const heart = e.target.closest('[data-fav-actor]');
     if (heart) return onHeart(+heart.dataset.favActor);
-    if (e.target.closest('[data-act="to-search"]')) return onBack();
     if (e.target.closest('[data-act="set-photo"]')) return $('#ap-file').click();
     if (e.target.closest('[data-act="clear-photo"]')) return setCustom(+root.dataset.id, { photo: '' }).then(() => renderActorPage(+root.dataset.id));
-    if (e.target.closest('[data-act="set-site"]')) {
-      const a = getActor(+root.dataset.id);
-      const u = prompt('公式サイトの URL（空にすると消えます）', (a && a.custom && a.custom.site) || 'https://');
-      if (u === null) return;
-      const v = u.trim();
-      if (v && !safeUrl(v)) return toast('http(s) の URL を入れてください');
-      return setCustom(+root.dataset.id, { site: v === 'https://' ? '' : v }).then(() => renderActorPage(+root.dataset.id));
-    }
     if (e.target.closest('[data-act="search-words"]')) {
       const a = getActor(+root.dataset.id);
-      return a && onSearchWords(a);
+      if (a) showHome({ q: a.aliases.find((x) => x.length >= 2) || a.display });
+      return;
     }
     const card = e.target.closest('.card');
-    if (card && root._vids) return openDetail(root._vids[+card.dataset.i], { list: root._vids, index: +card.dataset.i });
+    if (card && root._vids) openDetail(root._vids[+card.dataset.i], { list: root._vids, index: +card.dataset.i });
   });
   $('#actor-back').onclick = onBack;
   on('favactors', () => syncHearts(root));
-}
-
-// ───────────── お気に入りの出演者（#favactors） ─────────────
-
-export function renderFavActors() {
-  const list = mountActorList($('#favactors-list'), { ids: favActorIds(), sort: 'name', emptyText: 'お気に入りの出演者はまだいません。出演者の ♡ を押すと追加されます' });
-  return list;
 }

@@ -40,9 +40,6 @@ export const isFav = (key) => rows.has(key);
 /** お気に入りの動画の key（追加が新しい順） */
 export const favKeys = () => [...rows.values()].sort((a, b) => b.addedAt - a.addedAt).map((r) => r.key);
 
-// お気に入りに追加した時刻（一覧を追加順に並べるのに使う）
-export const favAddedAt = (key) => rows.get(key)?.addedAt || 0;
-
 // 動画オブジェクトから保存する行を作る
 function toRow(video, addedAt = Date.now()) {
   return {

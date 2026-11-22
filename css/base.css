@@ -195,16 +195,6 @@ header {
 .banner .bar { height: 4px; border-radius: 2px; background: var(--surface-2); margin-top: 8px; overflow: hidden; }
 .banner .bar span { display: block; height: 100%; background: var(--accent); transition: width .4s; }
 
-/* 最近の検索 */
-.suggest {
-  position: absolute; left: 0; right: 0; top: 46px; z-index: 30; max-height: 50vh; overflow-y: auto;
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.5); padding: 4px 0;
-}
-.suggest-head { font-size: 11px; color: var(--muted); padding: 6px 14px 4px; }
-.suggest-row { display: flex; align-items: center; }
-.suggest-q { flex: 1; text-align: left; background: none; border: 0; padding: 10px 14px; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.suggest-del { background: none; border: 0; color: var(--muted); width: 44px; height: 44px; font-size: 16px; }
-
 /* 起動中の仮表示 */
 .card.skel .thumb { background: linear-gradient(90deg, var(--surface-2) 25%, #2c2c33 50%, var(--surface-2) 75%); background-size: 200% 100%; animation: skel 1.2s infinite linear; }
 .card.skel .title, .card.skel .sub { background: var(--surface-2); border-radius: 4px; color: transparent; margin-top: 6px; }
@@ -251,12 +241,6 @@ header.top .chips { margin-top: 0; padding: 0 12px; }
 /* トーストはドックの上に出す */
 #toast { bottom: calc(var(--dock-h) + var(--safe-bottom) + 12px); }
 
-
-/* 機能のオン/オフ */
-.feature-row { height: auto; min-height: 48px; gap: 12px; padding: 4px 0; }
-.feature-row .note { display: block; font-size: 11px; margin-top: 1px; }
-.feature-row + .feature-row { border-top: 1px solid var(--border); }
-.tabbar button[hidden] { display: none; }
 
 /* スタジオ一覧 */
 .picker-q { width: 100%; height: 40px; border-radius: 20px; border: 1px solid var(--border); background: var(--surface-2); padding: 0 14px; font-size: 16px; margin: 4px 0 8px; outline: none; }
@@ -326,79 +310,50 @@ details.more[open] summary { margin-bottom: 4px; }
 .version-entry ul { margin: 4px 0 0; padding-left: 18px; font-size: 13px; color: var(--text); }
 .version-entry li { margin: 2px 0; }
 
-/* ホームの「最近見た動画」 */
-.continue-now { position: absolute; left: 4px; bottom: 4px; padding: 1px 6px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; }
-
-/* お気に入り｜履歴 の切り替え（iOS の分割コントロールに合わせる） */
+/* 切り替え（iOS の分割コントロールに合わせる） */
 .seg { display: flex; margin: 10px 12px 0; padding: 2px; border-radius: 9px; background: var(--surface); border: 1px solid var(--border); }
 .seg.hidden { display: none; }
 .seg button { flex: 1; height: 32px; border: 0; border-radius: 7px; background: none; color: var(--muted); font-size: 13px; font-weight: 600; }
 .seg button.on { background: #3a3a40; color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
-/* スタジオのタブ: スタジオごとの名前 + 最新動画のカルーセルを縦に並べる */
-.sf { padding: 14px 0 4px; }
-.sf-head { display: flex; align-items: center; gap: 2px; padding: 0 12px 0 4px; }
-.sf-star { flex: none; width: 44px; height: 44px; background: none; border: 0; color: var(--muted); font-size: 20px; }
-.sf-star.on { color: var(--accent); }
-.sf-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; background: none; border: 0; padding: 8px 0; text-align: left; color: var(--text); }
-.sf-name { font-size: 18px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sf-title small { flex: none; color: var(--muted); font-size: 12px; }
-.sf-all { flex: none; min-height: 44px; padding: 0 4px 0 10px; background: none; border: 0; color: var(--accent); font-size: 14px; }
-.sf-row {
-  display: flex; gap: 10px; overflow-x: auto; padding: 4px 12px 6px; scroll-snap-type: x proximity; scrollbar-width: none;
-  overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
-}
-.sf-row::-webkit-scrollbar { display: none; }
-.sf-row .card { flex: none; width: 168px; scroll-snap-align: start; }
-.sf-row .title { font-size: 13px; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-/* カルーセルの最後: そのスタジオをすべて見る */
-.sf-more { flex: none; width: 168px; aspect-ratio: 16 / 9; align-self: flex-start; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 10px; border: 1px dashed var(--border); background: none; color: var(--accent); scroll-snap-align: start; }
-.sf-more span { font-size: 14px; font-weight: 600; }
-.sf-more b { font-size: 12px; font-weight: 400; color: var(--muted); }
-#studio-sort { margin-top: 12px; }
-
 /* タップ領域を 44pt に広げる（Apple の HIG）。見た目は変えない */
 .toggle::before { content: ''; position: absolute; inset: -8px -4px; }
 .picker-toggle { width: 44px; }
 
-/* ───────── ホーム（受動的に見つける）・検索・出演者 ───────── */
-header.top.home-top { padding-bottom: 0; position: sticky; top: 0; z-index: 8; }
-.home-tabs { display: flex; gap: 4px; padding: 0 8px; overflow-x: auto; scrollbar-width: none; }
-.home-tabs::-webkit-scrollbar { display: none; }
-.home-tabs button { flex: 1 0 auto; min-height: 44px; padding: 0 10px; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap; }
-.home-tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
-.hpanel { min-height: 50vh; }
-.hpanel.slide-l { animation: slide-in-l .22s ease; }
-.hpanel.slide-r { animation: slide-in-r .22s ease; }
-@keyframes slide-in-l { from { transform: translateX(32px); opacity: 0; } to { transform: none; opacity: 1; } }
-@keyframes slide-in-r { from { transform: translateX(-32px); opacity: 0; } to { transform: none; opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .hpanel.slide-l, .hpanel.slide-r { animation: none; } }
-.hrow { padding-left: 12px; }
-.hrow .sf-head { padding-left: 0; }
-.hrow-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 8px 0; }
-.hrow-title small { color: var(--muted); font-size: 12px; white-space: nowrap; }
-.hrow .sf-row { padding-left: 0; margin-right: 0; }
-.hrow .sf-row .card .sub { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hrow .sf-all { padding-right: 12px; }
-.av-row .av-card { flex: none; width: 84px; background: none; border: 0; padding: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text); }
-.av-name { font-size: 12px; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ───────── 各タブの上部（検索欄・チップ）・一覧 ───────── */
+header.top .seg { margin: 8px 12px 0; }
+header.top .top-search { padding-bottom: 8px; }
+.day-sep { grid-column: 1 / -1; font-size: 13px; font-weight: 700; padding: 8px 0 0; }
+.day-sep:first-child { padding-top: 0; }
+.cond.star { color: var(--accent); }
+.cond.star.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+.picker-star { flex: none; width: 44px; background: none; border: 0; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 18px; padding: 0; }
+.picker-star.on { color: var(--accent); }
 
-/* 代表画像（丸） */
+/* カードのハート（開かずにお気に入り） */
+.qfav { position: absolute; right: 4px; bottom: 4px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 19px; line-height: 1; color: #fff; background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.qfav.on { color: #ff5a7a; }
+.qfav:active { transform: scale(.9); }
+
+/* 出演者: 正方形の写真を 2 列 */
+.actor-grid { display: grid; gap: 14px 10px; padding: 10px 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px) { .actor-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 960px) { .actor-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.ag-card { cursor: pointer; min-width: 0; -webkit-user-select: none; user-select: none; }
+.ag-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
+.ag-photo { position: relative; aspect-ratio: 1 / 1; border-radius: 12px; overflow: hidden; background: linear-gradient(135deg, #2a2540, #1c1c22); display: grid; place-items: center; transition: transform .15s; }
+.ag-card:active .ag-photo { transform: scale(.97); }
+.ag-photo img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
+.ag-photo .av-ph { font-size: 44px; }
+.ag-photo .heart-btn { position: absolute; right: 2px; top: 2px; z-index: 1; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.ag-photo .heart-btn.on { color: #ff5a7a; }
+.ag-name { margin-top: 6px; font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ag-sub { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 代表画像（丸。出演者の詳細） */
 .av { flex: none; width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background: linear-gradient(135deg, #2a2540, #1c1c22); display: grid; place-items: center; position: relative; }
-.av img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.av img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; display: block; }
 .av-ph { color: var(--muted); font-size: 20px; font-weight: 700; }
-.av-md { width: 68px; height: 68px; }
 .av-lg { width: 84px; height: 84px; }
-
-/* 出演者の一覧の行 */
-.actor-list { padding: 0 12px; }
-.actor-row { display: flex; align-items: center; gap: 12px; min-height: 68px; padding: 8px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
-.actor-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.ar-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ar-name { font-size: 16px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ar-sub, .ar-tags { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ar-tags { color: var(--accent); opacity: .85; }
-.ar-n { color: var(--muted); font-size: 15px; font-variant-numeric: tabular-nums; flex: none; }
-.ar-n small { font-size: 11px; margin-left: 1px; }
 .heart-btn { flex: none; width: 44px; height: 44px; background: none; border: 0; color: var(--muted); font-size: 22px; line-height: 1; }
 .heart-btn.on { color: #ff5a7a; }
 
@@ -414,25 +369,6 @@ header.top.home-top { padding-bottom: 0; position: sticky; top: 0; z-index: 8; }
 .ap-tags .dt-chip small { color: var(--muted); }
 .ap-stats { gap: 16px; font-size: 14px; }
 .ap-stats small { color: var(--muted); font-size: 12px; }
-.page-title { font-size: 17px; font-weight: 600; padding: 0 12px; }
 .list-nav { padding: 0 4px; }
 .back-btn { min-height: 44px; padding: 0 12px; background: none; border: 0; color: var(--accent); font-size: 16px; }
-.search-sort { padding: 8px 12px 0; font-size: 13px; color: var(--muted); }
-.search-sort select { font-size: 14px; margin-left: 6px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--text); }
-#view-search .seg, #view-favactors .seg { margin-top: 8px; }
-#view-search #search-pane-studios { padding: 0 12px; }
-#view-search .state, #view-favactors .state { padding: 24px 12px; }
-.seg.lib { margin-top: 10px; }
-
-/* ホーム: カードのハート（開かずにお気に入り）・「前回から」の区切り・続きのヒーロー */
-.thumb { position: relative; }
-.qfav { position: absolute; right: 4px; bottom: 4px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 19px; line-height: 1; color: #fff; background: rgba(0,0,0,.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-.qfav.on { color: #ff5a7a; }
-.qfav:active { transform: scale(.9); }
-.new-divider { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; color: var(--accent); font-size: 12px; font-weight: 600; padding: 6px 0 2px; }
-.new-divider::before, .new-divider::after { content: ''; flex: 1; height: 1px; background: var(--border, rgba(255,255,255,.14)); }
-#hp-new-meta b { color: var(--text); }
-.cont-hero { padding: 8px 12px 4px; }
-.cont-hero .card .thumb { aspect-ratio: 16 / 9; }
-.cont-hero .card .title { font-size: 15px; -webkit-line-clamp: 2; }
-.cont-play { position: absolute; left: 10px; bottom: 10px; padding: 8px 14px; border-radius: 20px; font-size: 14px; font-weight: 700; color: var(--accent-text, #fff); background: var(--accent); }
+#actors-note { padding: 12px; }

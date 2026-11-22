@@ -2,7 +2,6 @@
 
 import * as db from './db.js';
 import { state, on, emit, relocate, sourceKeys } from './data.js';
-import { feature } from './features.js';
 
 const MAX = 300;
 const viewed = new Map(); // key -> at（ミリ秒）
@@ -36,7 +35,6 @@ export function recentKeys() {
 }
 
 export async function recordView(video) {
-  if (!feature('history')) return; // 視聴履歴をオフにしているときは記録しない
   const at = Date.now();
   viewed.set(video.key, at);
   const row = { key: video.key, at, title: video.title, thumb: video.thumb, code: video.code, posts: sourceKeys(video) };
@@ -45,12 +43,5 @@ export async function recordView(video) {
   if (viewed.size > MAX) {
     for (const k of recentKeys().slice(MAX)) { viewed.delete(k); rows.delete(k); await db.del('history', k); }
   }
-  emit('history');
-}
-
-export async function clearHistory() {
-  viewed.clear();
-  rows.clear();
-  await db.clear('history');
   emit('history');
 }

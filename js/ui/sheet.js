@@ -64,6 +64,11 @@ export function closeSheet() {
   else hide();
 }
 
+/** シートを閉じて、閉じる「戻る」（履歴）が済んでから fn を呼ぶ（先にページを移すと、あとから届く「戻る」で元のページに引き戻される） */
+export function afterClose(fn) {
+  if (history.state && history.state.sheet) { addEventListener('popstate', fn, { once: true }); closeSheet(); } else { closeSheet(); fn(); }
+}
+
 // ---- ミニプレイヤー ----
 
 function minimize(el) {

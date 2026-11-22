@@ -7,9 +7,9 @@
 // 公開する関数
 //   initAnalytics()          起動時に 1 回
 //   track(e, data)           イベントを足す（detail.js / favorites.js / ui/search.js などから）
-//   trackView(page)          画面を開いた（main.js の route / ui/home.js のパネル切り替え）
+//   trackView(page)          画面を開いた（main.js の route / ui/home.js のチップ切り替え）
 //   usageContext()           { taps, scroll, ms }（起動からの累計。open / play に付ける）
-//   currentSurface()         いま見ている画面の名前（'home:new' など）
+//   currentSurface()         いま見ている画面の名前（'home:new' / 'actors' / 'history' / 'favs:videos' など）
 
 import * as db from './db.js';
 import { toast } from './util.js';
@@ -70,15 +70,14 @@ export function trackView(page) {
 function kindOf(el) {
   const tab = el.closest('[data-tab]');
   if (tab) return `tab:${tab.dataset.tab}`;
-  if (el.closest('#home-tabs button')) return `panel:${el.closest('button').dataset.p}`;
-  if (el.closest('.fav-btn, [data-fav-actor], [data-fav-studio]')) return 'fav';
+  if (el.closest('.fav-btn, [data-qfav], [data-fav-actor], [data-favstudio], .picker-star')) return 'fav';
   if (el.closest('.card')) return 'card';
   if (el.closest('.rel')) return 'related';
-  if (el.closest('.av-card, [data-actor]')) return 'actor';
+  if (el.closest('[data-actor]')) return 'actor';
   if (el.closest('.tag, [data-q]')) return 'tag';
   const act = el.closest('[data-act]');
   if (act) return `act:${String(act.dataset.act).split(':')[0]}`;
-  if (el.closest('[data-studio]')) return 'studio';
+  if (el.closest('[data-studio], .picker-row')) return 'studio';
   if (el.closest('[data-seg]')) return `seg:${el.closest('[data-seg]').dataset.seg}`;
   if (el.closest('.chip')) return 'chip';
   if (el.closest('[data-step]')) return 'step';
