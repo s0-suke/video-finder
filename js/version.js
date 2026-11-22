@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.18.5';
+export const VERSION = '1.18.6';
 
 export const CHANGELOG = [
+  {
+    version: '1.18.6',
+    date: '2026-11-23',
+    items: [
+      '内部の整理: 使っていなかった旧サーバー版のファイルを削除した（見た目・動作の変更なし）',
+    ],
+  },
   {
     version: '1.18.5',
     date: '2026-11-23',
