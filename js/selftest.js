@@ -116,6 +116,27 @@ export async function runSelftest() {
     assert(!isSheetOpen() || miniPlayer(), '詳細が閉じない');
   });
 
+  await check('詳細: 同じスタジオの動画が一番下に、下へ無限スクロールで並ぶ', async () => {
+    const counts = new Map();
+    for (const v of state.videos) counts.set(v.studioKey, (counts.get(v.studioKey) || 0) + 1);
+    const [studioKey] = [...counts].filter(([k]) => k).sort((a, b) => b[1] - a[1])[0] || [];
+    if (!studioKey || counts.get(studioKey) < 40) return 'スタジオの動画が少ないので省略';
+    await tab('home');
+    const { openDetail } = await import('./ui/detail.js');
+    const v = state.videos.find((x) => x.studioKey === studioKey);
+    openDetail(v, { list: [v], index: 0 });
+    await until(() => $('#sheet .related-grid .rel'), 3000);
+    const grid = $('#sheet .related-grid');
+    assert(grid, '関連動画がない');
+    assert(grid.nextElementSibling && grid.nextElementSibling.dataset.role === 'related-end', '一番下に置かれていない');
+    assert(getComputedStyle(grid).gridTemplateColumns.split(' ').length === 2 || innerWidth >= 640, '2 列でない（横スクロールのまま）');
+    const n0 = grid.children.length;
+    $('#sheet').scrollTo(0, $('#sheet').scrollHeight);
+    assert(await until(() => grid.children.length > n0, 3000), 'スクロールしても続きが読み込まれない');
+    history.back();
+    await until(() => !isSheetOpen(), 3000);
+  });
+
   await check('出演者: 2 列の正方形グリッドで並ぶ', async () => {
     await tab('actors');
     assert(visible('#view-actors'), '出演者のページが出ない');

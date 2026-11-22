@@ -6,9 +6,16 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.19.0';
+export const VERSION = '1.19.1';
 
 export const CHANGELOG = [
+  {
+    version: '1.19.1',
+    date: '2026-11-23',
+    items: [
+      '動画の詳細: 同じスタジオの動画を一番下に移し、横スクロールではなく、下へ無限スクロールで 2 列に並べるようにした（動画をたどりやすく）。押すとその動画の詳細に移り、「‹ 戻る」で元の動画に戻れる',
+    ],
+  },
   {
     version: '1.19.0',
     date: '2026-11-23',

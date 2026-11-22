@@ -23,8 +23,6 @@ import { gotoActor } from './actors.js';
 import { findActor } from '../actors.js';
 import { track, usageContext, currentSurface } from '../analytics.js';
 
-const RELATED = 12;
-
 // 詳細情報の取得で発売日が分かったら、開いている詳細の表示をその場で更新する
 let shown = null; // { video, el }
 on('release', (key) => {
@@ -49,25 +47,42 @@ function goBack() {
   if (prev) openDetail(prev.video, { ...(prev.nav || {}), keepBack: true });
 }
 
-// 同じスタジオの動画（新しい順。自分自身は除く）
-function relatedHTML(video) {
-  if (!video.studioKey) return '';
-  const list = [];
-  for (const v of state.videos) {
-    if (v.studioKey === video.studioKey && v.key !== video.key && v.title !== video.title) list.push(v);
-    if (list.length >= RELATED) break;
-  }
+// 同じスタジオの動画（新しい順。自分自身と同じタイトルは除く）。詳細の一番下に、下へ無限スクロールで並べる（動画をたどる入口）
+const RELATED_PAGE = 24;
+
+function relatedList(video) {
+  if (!video.studioKey) return [];
+  return state.videos.filter((v) => v.studioKey === video.studioKey && v.key !== video.key && v.title !== video.title);
+}
+
+const relatedCard = (v) => `<button class="rel" data-related="${esc(v.key)}">
+  <div class="thumb">${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(v.studio || '')}</div>`}</div>
+  <div class="title">${esc(v.title)}</div>
+</button>`;
+
+function relatedHTML(video, list) {
   if (!list.length) return '';
   return `
-    <div class="section-title">${esc(video.studio)} の動画</div>
-    <div class="related">
-      ${list.map((v) => `
-        <button class="rel" data-related="${esc(v.key)}">
-          <div class="thumb">${v.thumb ? `<img src="${esc(v.thumb)}" loading="lazy" referrerpolicy="no-referrer" alt="">` : `<div class="ph">${esc(v.studio || '')}</div>`}</div>
-          <div class="title">${esc(v.title)}</div>
-        </button>`).join('')}
-      <button class="rel more" data-studio="${esc(video.studioKey)}">すべて見る →</button>
-    </div>`;
+    <div class="section-title">${esc(video.studio)} の動画（${list.length.toLocaleString()} 本）</div>
+    <div class="related-grid" data-role="related"></div>
+    <div data-role="related-end" style="height:1px"></div>`;
+}
+
+/** 関連動画を、続きを読みながら下へ並べる（シートのスクロールで、末尾が近づくたびに足す） */
+function mountRelated(el, sheetEl, list) {
+  const grid = el.querySelector('[data-role="related"]');
+  const end = el.querySelector('[data-role="related-end"]');
+  if (!grid || !end) return;
+  let shown = 0;
+  const more = () => {
+    const next = list.slice(shown, shown + RELATED_PAGE);
+    if (!next.length) return;
+    grid.insertAdjacentHTML('beforeend', next.map(relatedCard).join(''));
+    shown += next.length;
+  };
+  more();
+  // 続きの読み込みは、シート（スクロールする入れ物）の中で末尾が近づいたとき
+  new IntersectionObserver((es) => { if (es[0].isIntersecting && shown < list.length) more(); }, { root: sheetEl, rootMargin: '600px' }).observe(end);
 }
 
 // opts.list / opts.index を渡すと、その並びで前後の動画へ移れる。
@@ -96,6 +111,7 @@ export function openDetail(video, opts = {}) {
   if (!opts.keepBack && !opts.fromRelated) back = [];
   track('open', { src: opts.src || (opts.fromRelated ? 'related' : opts.keepBack ? 'back' : currentSurface()), newV: isNew(video), ...usageContext() });
 
+  const related = relatedList(video);
   const el = document.createElement('div');
   el.className = 'detail';
   el.innerHTML = `
@@ -115,7 +131,6 @@ export function openDetail(video, opts = {}) {
     </div>
     <div data-role="details"></div>
     ${video.tags.length ? `<div class="tags">${video.tags.map((t) => `<button class="tag" data-q="${esc(t)}">${esc(t)}</button>`).join('')}</div>` : ''}
-    ${relatedHTML(video)}
     <div class="section-title">掲載サイト（${video.sources.length}）</div>
     ${video.sources.map((s) => `
       <div class="source">
@@ -125,6 +140,7 @@ export function openDetail(video, opts = {}) {
           ${s.link ? `<a class="btn" href="${esc(s.link)}" target="_blank" rel="noopener noreferrer">サイトで開く ↗</a>` : ''}
         </div>
       </div>`).join('')}
+    ${relatedHTML(video, related)}
     ${back.length || opts.fromRelated || nav ? `
     <div class="detail-bar">
       ${back.length || opts.fromRelated
@@ -180,7 +196,7 @@ export function openDetail(video, opts = {}) {
   // 左右スワイプで前後の動画へ（横スクロールする部品の上では使わない）
   let sx = null, sy = 0;
   el.addEventListener('touchstart', (e) => {
-    sx = e.target.closest('.dt-carousel, .related, .tags, .hero iframe, .detail-bar, .dt-root [class*="gallery"]') ? null : e.touches[0].clientX;
+    sx = e.target.closest('.dt-carousel, .tags, .hero iframe, .detail-bar, .dt-root [class*="gallery"]') ? null : e.touches[0].clientX;
     sy = e.touches[0].clientY;
   }, { passive: true });
   el.addEventListener('touchend', (e) => {
@@ -192,6 +208,7 @@ export function openDetail(video, opts = {}) {
 
   bindThumbFallback(el); // 関連動画のサムネイルが読めないとき
   const sheetEl = openSheet(el, { tall: true });
+  mountRelated(el, sheetEl, related);
   shown = { video, el };
   // ミニプレイヤーから大きく戻したとき、前後移動・戻る先をこの動画のものに戻す
   sheetEl.dataset.key = video.key;
