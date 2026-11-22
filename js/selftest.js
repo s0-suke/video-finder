@@ -48,7 +48,7 @@ export async function runSelftest() {
   await until(() => state.videos.length > 0, 20000);
   // 以降のテストは、すべての動画で始める（前回の保存状態の「新着」「お気に入り」ではなく）
   await tab('home');
-  $('#home-chips [data-view="all"]').click();
+  $('#home-chips [data-all]').click();
   await until(() => cards('#home-grid') > 0, 10000);
 
   await check('5 つのタブが並んでいる', () => {
@@ -69,7 +69,7 @@ export async function runSelftest() {
     $('#home-chips [data-view="fav"]').click();
     await wait(300);
     assert($('#home-chips [data-view="fav"]').classList.contains('on'), 'お気に入りが選ばれない');
-    $('#home-chips [data-view="all"]').click();
+    $('#home-chips [data-all]').click();
     await wait(300);
     assert(cards('#home-grid') > 0, 'すべてで 0 件');
   });

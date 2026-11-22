@@ -85,7 +85,7 @@ function renderChips() {
   const n = newCount();
   $('#home-chips').innerHTML =
     chip(filters.view === 'new', 'data-view="new"', `新着${n ? ` <span class="count">${n > 99 ? '99+' : n}</span>` : ''}`) +
-    chip(filters.view === 'all', 'data-view="all"', 'すべて') +
+    chip(filters.view === 'all' && !filters.studio, 'data-all', 'すべて') +
     chip(filters.view === 'fav', 'data-view="fav"', '★ お気に入りスタジオ') +
     top.map((s) => chip(filters.studio === s.key, `data-studio="${esc(s.key)}"`, esc(s.name))).join('') +
     (state.studios.length ? '<button class="chip more" data-more>スタジオ一覧…</button>' : '');
@@ -182,6 +182,7 @@ function init() {
     const b = e.target.closest('.chip');
     if (!b) return;
     if (b.dataset.more !== undefined) return openStudioPicker({ current: filters.studio, onPick: (key) => { filters.studio = key; commit(); } });
+    if (b.dataset.all !== undefined) { Object.assign(filters, { view: 'all', studio: '' }); return commit(); } // 「すべて」は、スタジオの絞り込みも外す
     if (b.dataset.view) { filters.view = b.dataset.view; return commit(); }
     if (b.dataset.studio) { filters.studio = filters.studio === b.dataset.studio ? '' : b.dataset.studio; commit(); }
   };

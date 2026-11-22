@@ -6,9 +6,17 @@
 import { esc, toast } from './util.js';
 import { registerSettingsSection } from './ui/settings.js';
 
-export const VERSION = '1.18.2';
+export const VERSION = '1.18.3';
 
 export const CHANGELOG = [
+  {
+    version: '1.18.3',
+    date: '2026-11-23',
+    items: [
+      'ホームのチップ: スタジオを選んだあと「すべて」を押すと、スタジオの絞り込みも外れるようにした（「すべて」が選んだスタジオと同時に点灯していた）',
+      'タップしやすくした（チップ・切り替え・詳細のスタジオ名）。出演者ページのタグは押せないので、チップとは違う見た目にした。履歴の「視聴済み」の表示は外した',
+    ],
+  },
   {
     version: '1.18.2',
     date: '2026-11-23',

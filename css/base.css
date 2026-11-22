@@ -372,3 +372,13 @@ header.top .top-search { padding-bottom: 8px; }
 .list-nav { padding: 0 4px; }
 .back-btn { min-height: 44px; padding: 0 12px; background: none; border: 0; color: var(--accent); font-size: 16px; }
 #actors-note { padding: 12px; }
+
+/* タップ領域を広げる（見た目は大きく変えない） */
+.chip { height: 40px; }
+header.top .seg button, #favs-seg button { height: 40px; }
+.kv .link { padding: 10px 2px; margin: -10px 0; }
+/* 出演者ページのタグは押せないので、チップとは違う見た目にする */
+.ap-tags .dt-chip { border-color: transparent; background: none; padding-left: 0; color: var(--muted); }
+.ap-tags .dt-chip small { opacity: .7; }
+/* 履歴の中では「視聴済み」は要らない */
+#history-grid .watched { display: none; }
